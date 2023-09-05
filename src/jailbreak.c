@@ -52,8 +52,39 @@ typedef struct _compatibility {
     char *build;
 } compatibility_t;
 
-// Only N92ap is supported right now.
 compatibility_t compatible_devices[] = {
+    {"K93AP", "9A334"},
+    {"K93AP", "9A405"},
+    {"K93AP", "9B176"},
+    {"K93AP", "9B206"},
+
+    {"K94AP", "9A334"},
+    {"K94AP", "9A405"},
+    {"K94AP", "9B176"},
+    {"K94AP", "9B206"},
+
+    {"K95AP", "9A334"},
+    {"K95AP", "9A405"},
+    {"K95AP", "9B176"},
+    {"K95AP", "9B206"},
+
+    {"K93AAP", "9B176"},
+    {"K93AAP", "9B206"},
+
+    {"J1AP", "9B176"},
+    {"J1AP", "9B206"},
+
+    {"J2AP", "9B176"},
+    {"J2AP", "9B206"},
+
+    {"J2aAP", "9B176"},
+    {"J2aAP", "9B206"},
+
+    {"N94AP", "9A334"},
+    {"N94AP", "9A405"},
+    {"N94AP", "9B176"},
+    {"N94AP", "9B206"},
+
     {"N92AP", "9B176"},
     {"N90AP", "9B176"},
     {"N88AP", "9B176"},
@@ -61,11 +92,9 @@ compatibility_t compatible_devices[] = {
     {"N88AP", "9B176"},
     {"K48AP", "9B176"},
 
-    {"K93AP", "9B176"},
-    {"K93AP", "9B206"},
-
     {"N92AP", "9B206"},
     {"N90AP", "9B206"},
+    {"N90AP", "9B208"},
     {"N88AP", "9B206"},
     {"N18AP", "9B206"},
     {"N88AP", "9B206"},
@@ -353,15 +382,7 @@ int main(int argc, char *argv[])
         /* Too lazy to add Mbdx support for 4.3, otherwise this'd all work out of the box. */
         fprintf(stderr,
                 "Installing an untether via this method will not work!\n"
-                "For build %s, you need to do the following:\n"
-                "  - Jailbreak with redsn0w/or anything else tethered.\n"
-                "  - Copy the specific untether files to your device:\n\n"
-                "      payload/XXX/var/unthreadedjb/launchd.conf => /etc/launchd.conf\n"
-                "      payload/XXX/var/unthreadedjb/jb => /var/unthreadedjb/jb (make sure to chmod +x)\n"
-                "      payload/XXX/var/unthreadedjb/amfi.dylib => /var/unthreadedjb/amfi.dylib\n\n"
-                "  - If you have not installed Cydia or an SSH bundle, copy over Cydia.tar to /var/unthreadedjb.\n"
-                "    however, if you have, then run `touch /var/unthreadedjb/install` on the device over SSH, or\n"
-                "    create an empty file with that name on device. IF YOU DO NOT DO THIS, YOU MAY WREAK HAVOC.\n",
+                "For build %s, use Legacy iOS Kit. (iPad 2 on iOS 4.3.x is not compatible)\n",
                 build);
         ERROR("Unsupported build\n");
     }
@@ -421,7 +442,7 @@ static void plist_replace_item(plist_t plist, char *name, plist_t item)
 {
     if (plist_dict_get_item(plist, name))
         plist_dict_remove_item(plist, name);
-    plist_dict_insert_item(plist, name, item);
+    plist_dict_set_item(plist, name, item);
 }
 
 void stroke_lockdownd(device_t * device)
@@ -432,8 +453,8 @@ void stroke_lockdownd(device_t * device)
     idevice_connection_t connection;
     uint32_t magic;
     uint32_t sent = 0;
-    plist_dict_insert_item(crashy, "Request", plist_new_string("Pair"));
-    plist_dict_insert_item(crashy, "PairRecord", plist_new_bool(0));
+    plist_dict_set_item(crashy, "Request", plist_new_string("Pair"));
+    plist_dict_set_item(crashy, "PairRecord", plist_new_bool(0));
     plist_to_xml(crashy, &request, &size);
 
     magic = __builtin_bswap32(size);
@@ -469,7 +490,7 @@ int jailbreak_device(const char *uuid)
         ERROR("Missing device UDID\n");
     }
 
-    tmpnam(backup_dir);
+    strcpy(backup_dir, "/tmp/pris0nbarake");
     DEBUG("Backing up files to %s\n", backup_dir);
 
     // Wait for a connection
@@ -664,78 +685,33 @@ int jailbreak_device(const char *uuid)
     fclose(f);
 
     if (count) {
-        void *buffer = malloc(512);
-        gzFile zfile = gzopen(tmpthing, "rb");
-        if (!zfile || !buffer) {
-            ERROR("Could not open compressed file\n");
+        DEBUG("Decompressing dump.cpio.gz...\n");
+        system("gzip -d /tmp/pris0nbarake/dump.cpio.gz");
+        DEBUG("Extracting dump.cpio...\n");
+        rmdir_recursive("var");
+        system("cpio -idv < /tmp/pris0nbarake/dump.cpio");
+        DEBUG("Grabbing com.apple.mobile.installation.plist...\n");
+        FILE *newf = fopen("var/mobile/Library/Caches/com.apple.mobile.installation.plist", "rb");
+        assert(newf != NULL);
+        fseek(newf, 0, SEEK_END);
+        long newfsize = ftell(newf);
+        fseek(newf, 0, SEEK_SET);
+
+        void *filebuf = malloc(newfsize);
+        fread(filebuf, newfsize, 1, newf);
+        fclose(newf);
+
+        rmdir_recursive("var");
+        if (newfsize <= 0)
+            ERROR("Woah, what happened during reading?\n");
+
+        if (!memcmp(filebuf, "bplist00", 8)) {
+            DEBUG("com.apple.mobile.installation.plist is bplist\n");
+            plist_from_bin(filebuf, newfsize, &mobile_install_plist);
+        } else {
+            DEBUG("com.apple.mobile.installation.plist is xml\n");
+            plist_from_xml(filebuf, newfsize, &mobile_install_plist);
         }
-
-        memset(buffer, '\0', 512);
-
-        while ((gzread(zfile, &buffer, 76) > 75)
-               && !memcmp(&buffer, "070707", 6)) {
-            int file_name_length = cpio_get_file_name_length(&buffer);
-            if (!file_name_length) {
-                ERROR("cpio archive has zero length filename, wat\n");
-            }
-
-            char *filename_buffer = malloc(file_name_length);
-            assert(filename_buffer != NULL);
-
-            int read_len = gzread(zfile, filename_buffer, file_name_length);
-            if (read_len != file_name_length) {
-                ERROR("could not read filename?!?!\n");
-            }
-
-            int seek_offset = cpio_get_file_length(&buffer);
-
-            if (strcmp
-                (filename_buffer,
-                 "./var/mobile/Library/Caches/com.apple.mobile.installation.plist"))
-            {
-                if (strncmp
-                    (filename_buffer,
-                     "./var/mobile/Library/Caches/com.apple.LaunchServices-",
-                     strlen
-                     ("./var/mobile/Library/Caches/com.apple.LaunchServices-")))
-                {
-                    if (seek_offset)
-                        gzseek(zfile, seek_offset, 1);
-                } else {
-                    if (num_of_csstores > 15) {
-                        WARN("Why do you have more than 16 csstore files?\n");
-                    } else {
-                        char buffer[32];
-                        int add_len =
-                            strlen
-                            ("./var/mobile/Library/Caches/com.apple.LaunchServices-");
-                        int num =
-                            strtoul((char *)(filename_buffer + add_len), NULL,
-                                    10);
-                        num_of_csstores++;
-                        csstores[num_of_csstores].csstore_number = num;
-                        DEBUG("Found a csstore! (%d/%d)\n", num,
-                              num_of_csstores);
-                    }
-                    gzseek(zfile, seek_offset, 1);
-                }
-            } else {
-                void *filebuf = malloc(seek_offset);
-                int readlen = 0;
-                assert(filebuf != NULL);
-
-                int bytes = gzread(zfile, (void *)(filebuf), seek_offset);
-                if (bytes <= 0)
-                    ERROR("Woah, what happened during reading?\n");
-
-                if (!memcmp(filebuf, "bplist00", 8))
-                    plist_from_bin(filebuf, seek_offset, &mobile_install_plist);
-                else
-                    plist_from_xml(filebuf, seek_offset, &mobile_install_plist);
-            }
-            free(filename_buffer);
-        }
-        gzclose(zfile);
     }
 
     if (frc) {
@@ -760,7 +736,7 @@ int jailbreak_device(const char *uuid)
                                plist_new_string("/var/mobile/DemoApp.app"));
 
             plist_t environment_dict = plist_new_dict();
-            plist_dict_insert_item(environment_dict, "LAUNCHD_SOCKET",
+            plist_dict_set_item(environment_dict, "LAUNCHD_SOCKET",
                                    plist_new_string
                                    ("/private/var/tmp/launchd/sock"));
             plist_replace_item(system_plist, "EnvironmentVariables",
@@ -841,23 +817,6 @@ int jailbreak_device(const char *uuid)
              "Media/Recordings/.haxx/Library/Caches/com.apple.mobile.installation.plist",
              0100644, 501, 501, 4) != 0) {
             ERROR("Could not add installation plist!\n");
-        }
-
-        /* Kill csstores. */
-        while (num_of_csstores != 0) {
-            char buf[128];
-
-            snprintf(buf, 128,
-                     "Media/Recordings/.haxx/Library/Caches/com.apple.LaunchServices-%03d.csstore",
-                     csstores[num_of_csstores].csstore_number);
-
-            if (backup_add_file_from_data(backup, "MediaDomain", "LOLWUT", 6,
-                                          buf, 0100644, 501, 501, 4) != 0) {
-                ERROR("Could not add cs store %d/%d!\n", num_of_csstores,
-                      csstores[num_of_csstores].csstore_number);
-            }
-
-            num_of_csstores--;
         }
 
         plist_free(mobile_install_plist);
@@ -1092,6 +1051,7 @@ int jailbreak_device(const char *uuid)
      * XXX: Replace getchar() with stat("/var/mobile/Media/mount.stderr") or whatever.
      */
     WARN("Please run the #Unthread application to remount the root filesystem as read/write. Hit a key to continue when done.\n");
+    WARN("Yes, the app is supposed to crash. Don't worry about it.\n");
     getchar();
 
     /*
@@ -1149,31 +1109,6 @@ int jailbreak_device(const char *uuid)
             ERROR("Could not make folder\n");
         }
 
-        /* This is bad */
-        if (!strcmp(product, "N18AP") || !strcmp(product, "N88AP")) {
-            if (backup_add_file_from_path
-                (backup, "MediaDomain", "payload/Unthread.app/unthread@1x.png",
-                 "Media/Recordings/.haxx/var/unthreadedjb/unthread.png",
-                 0100644, 0, 0, 4) != 0) {
-                ERROR("Could not add unthread.png");
-            }
-        } else if (!strcmp(product, "K48AP") || !strcmp(product, "K93AP")) {
-            if (backup_add_file_from_path
-                (backup, "MediaDomain",
-                 "payload/Unthread.app/unthread-ipad.png",
-                 "Media/Recordings/.haxx/var/unthreadedjb/unthread.png",
-                 0100644, 0, 0, 4) != 0) {
-                ERROR("Could not add unthread.png");
-            }
-        } else {
-            if (backup_add_file_from_path
-                (backup, "MediaDomain", "payload/Unthread.app/unthread.png",
-                 "Media/Recordings/.haxx/var/unthreadedjb/unthread.png",
-                 0100644, 0, 0, 4) != 0) {
-                ERROR("Could not add unthread.png");
-            }
-        }
-
         {
             char jb_path[128];
             char amfi_path[128];
@@ -1214,7 +1149,7 @@ int jailbreak_device(const char *uuid)
                 (backup, "MediaDomain", "payload/Cydia.tar",
                  "Media/Recordings/.haxx/var/unthreadedjb/Cydia.tar", 0100644,
                  0, 0, 4) != 0) {
-                ERROR("Could not add amfi");
+                ERROR("Could not add Cydia");
             }
         }
     }

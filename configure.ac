@@ -24,6 +24,8 @@ OPENSSL_STATIC=""
 PKG_CHECK_MODULES(libimobiledevice, libimobiledevice-1.0 >= 1.1.0)
 PKG_CHECK_MODULES(libplist, libplist >= 0.15)
 PKG_CHECK_MODULES(libzip, libzip >= 0.8)
+PKG_CHECK_MODULES(zlib, zlib)
+PKG_CHECK_MODULES(libcrypto, libcrypto)
 
 
 GLOBAL_CFLAGS=$ACCFLAGS
