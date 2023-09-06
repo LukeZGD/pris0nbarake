@@ -1,10 +1,55 @@
 #!/bin/bash
 
+PREFIX=/usr/local
+limd() {
+    install_name_tool -change $PREFIX/lib/libimobiledevice-1.0.6.dylib @executable_path/lib/libimobiledevice-1.0.6.dylib $1
+    install_name_tool -change $PREFIX/lib/libusbmuxd-2.0.6.dylib @executable_path/lib/libusbmuxd-2.0.6.dylib $1
+    install_name_tool -change $PREFIX/lib/libimobiledevice-glue-1.0.0.dylib @executable_path/lib/libimobiledevice-glue-1.0.0.dylib $1
+    install_name_tool -change $PREFIX/lib/libplist-2.0.4.dylib @executable_path/lib/libplist-2.0.4.dylib $1
+}
+
 if [[ $(uname) == "Darwin" ]]; then
-    curl -LO https://gist.github.com/LukeZGD/ed69632435390be0e41c66620510a19c/raw/305c03a2ef955c0947a8ac2ca43137a5fb8d1fe2/limd-build-macos.sh
+    curl -LO https://gist.github.com/LukeZGD/ed69632435390be0e41c66620510a19c/raw/aea321877d651a3391c8884fbbd7cd32fd0a2e71/limd-build-macos.sh
     chmod +x limd-build-macos.sh
     ./limd-build-macos.sh
-    patch configure.ac < configure.patch
+    patch -f configure.ac < configure.patch
+    patch -f src/idevicebackup2.c src/idevicebackup2.patch
+
+    LIBRESSL_VER=2.2.7
+    DEPSDIR=$PREFIX
+    LIBSSL=$DEPSDIR/lib/libssl.35.tbd
+    LIBCRYPTO=$DEPSDIR/lib/libcrypto.35.tbd
+    SDKDIR=`xcrun --sdk macosx --show-sdk-path 2>/dev/null`
+    LIBCURL_VERSION=`/usr/bin/curl-config --version |cut -d " " -f 2`
+    LIBXML2_VERSION=`/usr/bin/xml2-config --version |cut -d " " -f 2`
+    LIMD_CFLAGS="-I$PREFIX/include"
+    LIMD_LIBS="-L$PREFIX/lib -limobiledevice-1.0 -lplist-2.0"
+    LIMD_VERSION=`cat $PREFIX/lib/pkgconfig/libimobiledevice-1.0.pc |grep Version: |cut -d " " -f 2`
+    LIBPLIST_CFLAGS="-I$PREFIX/include"
+    LIBPLIST_LIBS="-L$PREFIX/lib -lplist-2.0"
+    LIBPLIST_VERSION=`cat $PREFIX/lib/pkgconfig/libplist-2.0.pc |grep Version: |cut -d " " -f 2`
+    LIMD_GLUE_CFLAGS="-I$PREFIX/include"
+    LIMD_GLUE_LIBS="-L$PREFIX/lib -limobiledevice-glue-1.0"
+    LIMD_GLUE_VERSION=`cat $PREFIX/lib/pkgconfig/libimobiledevice-glue-1.0.pc |grep Version: |cut -d " " -f 2`
+    LIBZIP_VERSION=1.7.1
+    LIBZIP_DIR=libzip-$LIBZIP_VERSION
+    LIBZIP_CFLAGS="-I$DEPSDIR/$LIBZIP_DIR/lib -I$DEPSDIR/$LIBZIP_DIR/build"
+    LIBZIP_LIBS="$DEPSDIR/$LIBZIP_DIR/build/lib/libzip.a -Xlinker /usr/lib/libbz2.dylib -Xlinker /usr/lib/liblzma.dylib -lz"
+    sudo cp -R deps/libressl-$LIBRESSL_VER deps/libzip-$LIBZIP_VERSION deps/bin deps/lib deps/include /usr/local
+
+    ./autogen.sh \
+      openssl_CFLAGS="-I$DEPSDIR/libressl-$LIBRESSL_VER/include" openssl_LIBS="-Xlinker $LIBSSL -Xlinker $LIBCRYPTO" openssl_VERSION="$LIBRESSL_VER" \
+      libcurl_CFLAGS="-I$SDKDIR/usr/include" libcurl_LIBS="-lcurl" libcurl_VERSION="$LIBCURL_VERSION" \
+      libzip_CFLAGS="$LIBZIP_CFLAGS" libzip_LIBS="$LIBZIP_LIBS" libzip_VERSION="$LIBZIP_VERSION" \
+      zlib_CFLAGS="-I$SDKDIR/usr/include" zlib_LIBS="-lz" zlib_VERSION="1.2" \
+      libimobiledevice_CFLAGS="$LIMD_CFLAGS" libimobiledevice_LIBS="$LIMD_LIBS" libimobiledevice_VERSION="$LIMD_VERSION" \
+      libplist_CFLAGS="$LIBPLIST_CFLAGS" libplist_LIBS="$LIBPLIST_LIBS" libplist_VERSION="$LIBPLIST_VERSION" \
+      limd_glue_CFLAGS="$LIMD_GLUE_CFLAGS" limd_glue_LIBS="$LIMD_GLUE_LIBS" limd_glue_VERSION="$LIMD_GLUE_VERSION"
+    make
+    limd src/unthreadedjb
+    mkdir -p output/lib
+    cp src/unthreadedjb output
+    cp $PREFIX/lib/libimobiledevice-1.0.6.dylib $PREFIX/lib/libusbmuxd-2.0.6.dylib $PREFIX/lib/libimobiledevice-glue-1.0.0.dylib $PREFIX/lib/libplist-2.0.4.dylib lib
     exit
 fi
 
@@ -99,3 +144,6 @@ cmake $CC_ARGS .
 make $JNUM
 make $JNUM install
 cd ..
+
+./autogen.sh
+make LIBS="-ldl"

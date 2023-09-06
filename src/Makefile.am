@@ -5,7 +5,7 @@ AM_CFLAGS =	                   \
 	$(libzip_CFLAGS)           \
 	$(libcurl_CFLAGS)          \
 	$(zlib_CFLAGS)             \
-	$(libcrypto_CFLAGS)
+	$(openssl_CFLAGS)
 
 AM_LDFLAGS =\
 	$(AC_LDFLAGS)              \
@@ -14,7 +14,7 @@ AM_LDFLAGS =\
 	$(libzip_LIBS)             \
 	$(libcurl_LIBS)            \
 	$(zlib_LIBS)               \
-	$(libcrypto_LIBS)
+	$(openssl_LIBS)
 
 bin_PROGRAMS = unthreadedjb
 

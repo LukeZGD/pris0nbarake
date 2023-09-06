@@ -5,4 +5,4 @@ autoconf
 autoheader
 automake -a -c
 autoreconf -i
-./configure --disable-dependency-tracking CFLAGS=-Wno-implicit-function-declaration
+./configure --disable-dependency-tracking CFLAGS=-Wno-implicit-function-declaration "$@"

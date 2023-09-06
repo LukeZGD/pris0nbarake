@@ -566,7 +566,7 @@ int jailbreak_device(const char *uuid)
                 fileinfo = NULL;
 
                 if (ffmt) {
-                    ERROR("Device already jailbroken! Detected stash.");
+                    ERROR("Device already jailbroken! Detected stash.\n");
                     afc_client_free(afc2);
                     lockdown_free(lockdown);
                     device_free(device);
@@ -576,7 +576,7 @@ int jailbreak_device(const char *uuid)
 
             afc_get_file_info(afc2, "/private/etc/launchd.conf", &fileinfo);
             if (fileinfo) {
-                ERROR("Device already jailbroken! Detected untether.");
+                ERROR("Device already jailbroken! Detected untether.\n");
                 afc_client_free(afc2);
                 lockdown_free(lockdown);
                 device_free(device);
@@ -588,7 +588,7 @@ int jailbreak_device(const char *uuid)
     }
 
     if (lockdown_start_service(lockdown, "com.apple.afc", &port) != 0) {
-        ERROR("Failed to start AFC service", 0);
+        ERROR("Failed to start AFC service\n", 0);
         lockdown_free(lockdown);
         device_free(device);
         return -1;
@@ -688,7 +688,6 @@ int jailbreak_device(const char *uuid)
         DEBUG("Decompressing dump.cpio.gz...\n");
         system("gzip -d /tmp/pris0nbarake/dump.cpio.gz");
         DEBUG("Extracting dump.cpio...\n");
-        rmdir_recursive("var");
         system("cpio -idv < /tmp/pris0nbarake/dump.cpio");
         DEBUG("Grabbing com.apple.mobile.installation.plist...\n");
         FILE *newf = fopen("var/mobile/Library/Caches/com.apple.mobile.installation.plist", "rb");
@@ -701,7 +700,6 @@ int jailbreak_device(const char *uuid)
         fread(filebuf, newfsize, 1, newf);
         fclose(newf);
 
-        rmdir_recursive("var");
         if (newfsize <= 0)
             ERROR("Woah, what happened during reading?\n");
 
@@ -867,7 +865,7 @@ int jailbreak_device(const char *uuid)
     /********************************************************/
     device = device_create(uuid);
     if (!device) {
-        ERROR("ERROR: Could not connect to device. Aborting.");
+        ERROR("ERROR: Could not connect to device. Aborting.\n");
         // we can't recover since the device connection failed...
         return -1;
     }
@@ -875,7 +873,7 @@ int jailbreak_device(const char *uuid)
     lockdown = lockdown_open(device);
     if (!lockdown) {
         device_free(device);
-        ERROR("ERROR: Could not connect to lockdown. Aborting");
+        ERROR("ERROR: Could not connect to lockdown. Aborting.\n");
         // we can't recover since the device connection failed...
         return -1;
     }
@@ -1127,7 +1125,7 @@ int jailbreak_device(const char *uuid)
                 (backup, "MediaDomain", launchd_conf_path,
                  "Media/Recordings/.haxx/var/unthreadedjb/launchd.conf",
                  0100644, 0, 0, 4) != 0) {
-                ERROR("Could not add launchd.conf");
+                ERROR("Could not add launchd.conf\n");
             }
             if (backup_symlink
                 (backup, "MediaDomain",
@@ -1138,18 +1136,18 @@ int jailbreak_device(const char *uuid)
             if (backup_add_file_from_path(backup, "MediaDomain", jb_path,
                                           "Media/Recordings/.haxx/var/unthreadedjb/jb",
                                           0100755, 0, 0, 4) != 0) {
-                ERROR("Could not add jb");
+                ERROR("Could not add jb\n");
             }
             if (backup_add_file_from_path(backup, "MediaDomain", amfi_path,
                                           "Media/Recordings/.haxx/var/unthreadedjb/amfi.dylib",
                                           0100755, 0, 0, 4) != 0) {
-                ERROR("Could not add amfi");
+                ERROR("Could not add amfi\n");
             }
             if (backup_add_file_from_path
                 (backup, "MediaDomain", "payload/Cydia.tar",
                  "Media/Recordings/.haxx/var/unthreadedjb/Cydia.tar", 0100644,
                  0, 0, 4) != 0) {
-                ERROR("Could not add Cydia");
+                ERROR("Could not add Cydia\n");
             }
         }
     }
@@ -1157,13 +1155,13 @@ int jailbreak_device(const char *uuid)
 
     backup_free(backup);
 
-    DEBUG("Installed jailbreak, fixing up directories.\n");
+    DEBUG("Installed jailbreak successfully.\n");
 
     /********************************************************/
     /* move back any remaining dirs via AFC */
     /********************************************************/
  fix:
-    DEBUG("Recovering files...\n", 80);
+    DEBUG("Moving files...\n", 80);
     if (!afc) {
         lockdown = lockdown_open(device);
         port = 0;
@@ -1223,7 +1221,7 @@ int jailbreak_device(const char *uuid)
 
     rmdir_recursive(backup_dir);
 
-    WARN("Recovery completed. If you want to retry jailbreaking, unplug your device and plug it back in. If you device has been jailbroken, reboot it.\n");
+    WARN("Done! If the jailbreak is successful, reboot the device.\n");
  leave:
     afc_client_free(afc);
     afc = NULL;
