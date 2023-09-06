@@ -48,8 +48,9 @@ if [[ $(uname) == "Darwin" ]]; then
     make
     limd src/unthreadedjb
     mkdir -p output/lib
-    cp src/unthreadedjb output
-    cp $PREFIX/lib/libimobiledevice-1.0.6.dylib $PREFIX/lib/libusbmuxd-2.0.6.dylib $PREFIX/lib/libimobiledevice-glue-1.0.0.dylib $PREFIX/lib/libplist-2.0.4.dylib lib
+    mv src/unthreadedjb output
+    cp $PREFIX/lib/libimobiledevice-1.0.6.dylib $PREFIX/lib/libusbmuxd-2.0.6.dylib $PREFIX/lib/libimobiledevice-glue-1.0.0.dylib $PREFIX/lib/libplist-2.0.4.dylib output/lib
+    echo "Done. unthreadedjb binary and libs are in output/"
     exit
 fi
 
@@ -147,3 +148,4 @@ cd ..
 
 ./autogen.sh
 make LIBS="-ldl"
+echo "Done. unthreadedjb binary is in src/"

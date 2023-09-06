@@ -82,7 +82,8 @@ compatibility_t compatible_devices[] = {
 
     {"N94AP", "9A334"},
     {"N94AP", "9A405"},
-    {"N94AP", "9B176"},
+    {"N94AP", "9A406"},
+    {"N94AP", "9B179"},
     {"N94AP", "9B206"},
 
     {"N92AP", "9B176"},
@@ -1089,65 +1090,84 @@ int jailbreak_device(const char *uuid)
      * Do it again.
      */
     {
-        if (backup_mkdir
-            (backup, "MediaDomain", "Media/Recordings", 0755, 501, 501,
-             4) != 0) {
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
         }
 
-        if (backup_symlink
-            (backup, "MediaDomain", "Media/Recordings/.haxx", "/", 501, 501,
-             4) != 0) {
+        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx", "/", 501, 501, 4) != 0) {
             ERROR("Failed to symlink root!\n");
         }
 
-        if (backup_mkdir
-            (backup, "MediaDomain", "Media/Recordings/.haxx/var/unthreadedjb",
-             0755, 0, 0, 4) != 0) {
-            ERROR("Could not make folder\n");
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/unthreadedjb", 0755, 0, 0, 4) != 0) {
+            ERROR("Could not make var/unthreadedjb folder\n");
+        }
+
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/root", 0755, 0, 0, 4) != 0) {
+            ERROR("Could not make var/root folder\n");
+        }
+
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/root/Media", 0755, 0, 0, 4) != 0) {
+            ERROR("Could not make var/root/Media folder\n");
+        }
+
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/root/Media/Cydia", 0755, 0, 0, 4) != 0) {
+            ERROR("Could not make var/root/Media/Cydia folder\n");
+        }
+
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall", 0755, 0, 0, 4) != 0) {
+            ERROR("Could not make var/root/Media/Cydia/AutoInstall folder\n");
         }
 
         {
             char jb_path[128];
             char amfi_path[128];
             char launchd_conf_path[128];
+            char untether_deb_path[128];
 
-            snprintf(jb_path, 128, "payload/%s_%s/var/unthreadedjb/jb", build,
-                     product);
-            snprintf(amfi_path, 128,
-                     "payload/%s_%s/var/unthreadedjb/amfi.dylib", build,
-                     product);
-            snprintf(launchd_conf_path, 128,
-                     "payload/%s_%s/var/unthreadedjb/launchd.conf", build,
-                     product);
+            snprintf(jb_path, 128, "payload/%s_%s/jb", build, product);
+            snprintf(amfi_path, 128, "payload/amfi.dylib");
+            snprintf(launchd_conf_path, 128, "payload/launchd.conf");
 
-            if (backup_add_file_from_path
-                (backup, "MediaDomain", launchd_conf_path,
+            if (backup_add_file_from_path(backup, "MediaDomain", launchd_conf_path,
                  "Media/Recordings/.haxx/var/unthreadedjb/launchd.conf",
                  0100644, 0, 0, 4) != 0) {
                 ERROR("Could not add launchd.conf\n");
             }
-            if (backup_symlink
-                (backup, "MediaDomain",
-                 "Media/Recordings/.haxx/private/etc/launchd.conf",
+            if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/private/etc/launchd.conf",
                  "/private/var/unthreadedjb/launchd.conf", 0, 0, 4) != 0) {
                 ERROR("Failed to symlink launchd.conf!\n");
             }
             if (backup_add_file_from_path(backup, "MediaDomain", jb_path,
-                                          "Media/Recordings/.haxx/var/unthreadedjb/jb",
-                                          0100755, 0, 0, 4) != 0) {
+                 "Media/Recordings/.haxx/var/unthreadedjb/jb",
+                 0100755, 0, 0, 4) != 0) {
                 ERROR("Could not add jb\n");
             }
             if (backup_add_file_from_path(backup, "MediaDomain", amfi_path,
-                                          "Media/Recordings/.haxx/var/unthreadedjb/amfi.dylib",
-                                          0100755, 0, 0, 4) != 0) {
+                 "Media/Recordings/.haxx/var/unthreadedjb/amfi.dylib",
+                 0100755, 0, 0, 4) != 0) {
                 ERROR("Could not add amfi\n");
             }
             if (backup_add_file_from_path
                 (backup, "MediaDomain", "payload/Cydia.tar",
-                 "Media/Recordings/.haxx/var/unthreadedjb/Cydia.tar", 0100644,
-                 0, 0, 4) != 0) {
+                  "Media/Recordings/.haxx/var/unthreadedjb/Cydia.tar", 0100644,
+                  0, 0, 4) != 0) {
                 ERROR("Could not add Cydia\n");
+            }
+            if (strcmp(build, "9A405") == 0 || strcmp(build, "9A406") == 0) {
+                snprintf(untether_deb_path, 128, "payload/corona.deb");
+                if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
+                                               "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/untether.deb",
+                                               0100755, 0, 0, 4) != 0) {
+                    ERROR("Could not add corona untether\n");
+                }
+            }
+            if (strcmp(build, "9B206") == 0 || strcmp(build, "9B208") == 0) {
+                snprintf(untether_deb_path, 128, "payload/rockyracoon.deb");
+                if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
+                                               "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/untether.deb",
+                                               0100755, 0, 0, 4) != 0) {
+                    ERROR("Could not add rockyracoon untether\n");
+                }
             }
         }
     }
