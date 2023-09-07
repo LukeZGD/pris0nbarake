@@ -40,12 +40,13 @@
 #include <libimobiledevice/afc.h>
 #include <libimobiledevice/sbservices.h>
 #include <libimobiledevice/file_relay.h>
+#include <libimobiledevice/diagnostics_relay.h>
 
 #include <zlib.h>
 
 #include "common.h"
 
-#define AFCTMP 	"HackStore"
+#define AFCTMP     "HackStore"
 
 typedef struct _compatibility {
     char *product;
@@ -68,8 +69,8 @@ compatibility_t compatible_devices[] = {
     {"K95AP", "9B176"},
     {"K95AP", "9B206"},
 
-    {"K93AAP", "9B176"},
-    {"K93AAP", "9B206"},
+    {"K93aAP", "9B176"},
+    {"K93aAP", "9B206"},
 
     {"J1AP", "9B176"},
     {"J1AP", "9B206"},
@@ -114,18 +115,6 @@ compatibility_t compatible_devices[] = {
     {"N18AP", "9A334"},
     {"N88AP", "9A334"},
     {"K48AP", "9A334"},
-
-    {"N90AP", "8L1"},
-    {"N88AP", "8L1"},
-    {"N18AP", "8L1"},
-    {"N88AP", "8L1"},
-    {"K48AP", "8L1"},
-
-    {"N90AP", "8K2"},
-    {"N88AP", "8K2"},
-    {"N18AP", "8K2"},
-    {"N88AP", "8K2"},
-    {"K48AP", "8K2"},
 
     {NULL, NULL}
 };
@@ -339,7 +328,6 @@ int main(int argc, char *argv[])
     char *uuid = NULL;
     char *product = NULL;
     char *build = NULL;
-    int old_os = 0;
 
     /********************************************************/
     /* device detection */
@@ -382,8 +370,8 @@ int main(int argc, char *argv[])
     if (build[0] <= '8') {
         /* Too lazy to add Mbdx support for 4.3, otherwise this'd all work out of the box. */
         fprintf(stderr,
-                "Installing an untether via this method will not work!\n"
-                "For build %s, use Legacy iOS Kit. (iPad 2 on iOS 4.3.x is not compatible)\n",
+                "Installing an untether via this method is not supported for this build.\n"
+                "For build %s, use Legacy iOS Kit to jailbreak.\n",
                 build);
         ERROR("Unsupported build\n");
     }
@@ -630,8 +618,8 @@ int jailbreak_device(const char *uuid)
     // TODO other paths?
 
     /********************************************************
-	 * Get plist from ~/Library/Caches.
-	 ********************************************************/
+     * Get plist from ~/Library/Caches.
+     ********************************************************/
     plist_t mobile_install_plist = NULL;
 
     rmdir_recursive(backup_dir);
@@ -689,6 +677,7 @@ int jailbreak_device(const char *uuid)
         DEBUG("Decompressing dump.cpio.gz...\n");
         system("gzip -d /tmp/pris0nbarake/dump.cpio.gz");
         DEBUG("Extracting dump.cpio...\n");
+        rmdir_recursive("var/mobile/Library/Caches");
         system("cpio -idv < /tmp/pris0nbarake/dump.cpio");
         DEBUG("Grabbing com.apple.mobile.installation.plist...\n");
         FILE *newf = fopen("var/mobile/Library/Caches/com.apple.mobile.installation.plist", "rb");
@@ -721,8 +710,8 @@ int jailbreak_device(const char *uuid)
     lockdown = NULL;
 
     /*****
-	 * Modify com.apple.mobile whatever installation plist.
-	 *****/
+     * Modify com.apple.mobile whatever installation plist.
+     *****/
     assert(mobile_install_plist != NULL);
     {
         plist_t system_plist =
@@ -764,8 +753,8 @@ int jailbreak_device(const char *uuid)
     }
 
     /**
-	 * Make the backup EVIL. Part 1.
-	 */
+     * Make the backup EVIL. Part 1.
+     */
     {
         if (backup_mkdir
             (backup, "MediaDomain", "Media/Recordings", 0755, 501, 501,
@@ -784,17 +773,17 @@ int jailbreak_device(const char *uuid)
              501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
         }
-#define ADD_FILE(path) 																							\
-		if(backup_add_file_from_path(backup, "MediaDomain", "payload/Unthread.app/" path, 						\
-			                         "Media/Recordings/.haxx/DemoApp.app/" path, 0100644, 501, 501, 4) != 0) {	\
-			ERROR("Could not add" path); 																		\
-		}
+#define ADD_FILE(path)                                                                                          \
+        if(backup_add_file_from_path(backup, "MediaDomain", "payload/Unthread.app/" path,                       \
+                                     "Media/Recordings/.haxx/DemoApp.app/" path, 0100644, 501, 501, 4) != 0) {  \
+            ERROR("Could not add" path);                                                                        \
+        }
 
-#define ADD_FILE_EXEC(path) 																					\
-		if(backup_add_file_from_path(backup, "MediaDomain", "payload/Unthread.app/" path, 						\
-			                         "Media/Recordings/.haxx/DemoApp.app/" path, 0100755, 501, 501, 4) != 0) { 	\
-			ERROR("Could not add" path); 																		\
-		}
+#define ADD_FILE_EXEC(path)                                                                                     \
+        if(backup_add_file_from_path(backup, "MediaDomain", "payload/Unthread.app/" path,                       \
+                                     "Media/Recordings/.haxx/DemoApp.app/" path, 0100755, 501, 501, 4) != 0) {  \
+            ERROR("Could not add" path);                                                                        \
+        }
 
         ADD_FILE("Info.plist");
         ADD_FILE_EXEC("DemoApp");
@@ -824,8 +813,8 @@ int jailbreak_device(const char *uuid)
     /********************************************************/
     /* restore backup */
     /********************************************************/
-    DEBUG
-        ("Sending initial data. Your device will appear to be restoring a backup, this may also take a while...");
+
+    DEBUG("Sending initial data. Your device will appear to be restoring a backup, this may also take a while...");
     char *rargv[] = {
         "idevicebackup2",
         "restore",
@@ -917,8 +906,8 @@ int jailbreak_device(const char *uuid)
     lockdown = NULL;
 
     /**
-	 * Change to /var/db/timezone thingy.
-	 */
+     * Change to /var/db/timezone thingy.
+     */
     rmdir_recursive(backup_dir);
     mkdir(backup_dir, 0755);
 
@@ -1120,15 +1109,11 @@ int jailbreak_device(const char *uuid)
 
         {
             char jb_path[128];
-            char amfi_path[128];
-            char launchd_conf_path[128];
             char untether_deb_path[128];
 
             snprintf(jb_path, 128, "payload/%s_%s/jb", build, product);
-            snprintf(amfi_path, 128, "payload/amfi.dylib");
-            snprintf(launchd_conf_path, 128, "payload/launchd.conf");
 
-            if (backup_add_file_from_path(backup, "MediaDomain", launchd_conf_path,
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/launchd.conf",
                  "Media/Recordings/.haxx/var/unthreadedjb/launchd.conf",
                  0100644, 0, 0, 4) != 0) {
                 ERROR("Could not add launchd.conf\n");
@@ -1142,30 +1127,47 @@ int jailbreak_device(const char *uuid)
                  0100755, 0, 0, 4) != 0) {
                 ERROR("Could not add jb\n");
             }
-            if (backup_add_file_from_path(backup, "MediaDomain", amfi_path,
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/amfi.dylib",
                  "Media/Recordings/.haxx/var/unthreadedjb/amfi.dylib",
                  0100755, 0, 0, 4) != 0) {
                 ERROR("Could not add amfi\n");
             }
-            if (backup_add_file_from_path
-                (backup, "MediaDomain", "payload/Cydia.tar",
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/Cydia.tar",
                   "Media/Recordings/.haxx/var/unthreadedjb/Cydia.tar", 0100644,
                   0, 0, 4) != 0) {
                 ERROR("Could not add Cydia\n");
             }
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/substrate4g1lbert.deb",
+                 "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/substrate4g1lbert.deb",
+                 0100755, 0, 0, 4) != 0) {
+                ERROR("Could not add substrate\n");
+            }
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/safemode4g1lbert.deb",
+                 "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/safemode4g1lbert.deb",
+                 0100755, 0, 0, 4) != 0) {
+                ERROR("Could not add safemode\n");
+            }
+            if (strcmp(product, "N94AP") == 0 || strcmp(build, "9A334") == 0) {
+                snprintf(untether_deb_path, 128, "payload/corona.deb");
+                if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
+                     "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/corona.deb",
+                     0100755, 0, 0, 4) != 0) {
+                    ERROR("Could not add corona untether\n");
+                }
+            }
             if (strcmp(build, "9A405") == 0 || strcmp(build, "9A406") == 0) {
                 snprintf(untether_deb_path, 128, "payload/corona.deb");
                 if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
-                                               "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/untether.deb",
-                                               0100755, 0, 0, 4) != 0) {
+                     "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/corona.deb",
+                     0100755, 0, 0, 4) != 0) {
                     ERROR("Could not add corona untether\n");
                 }
             }
             if (strcmp(build, "9B206") == 0 || strcmp(build, "9B208") == 0) {
                 snprintf(untether_deb_path, 128, "payload/rockyracoon.deb");
                 if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
-                                               "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/untether.deb",
-                                               0100755, 0, 0, 4) != 0) {
+                     "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/rockyracoon.deb",
+                     0100755, 0, 0, 4) != 0) {
                     ERROR("Could not add rockyracoon untether\n");
                 }
             }
@@ -1175,7 +1177,19 @@ int jailbreak_device(const char *uuid)
 
     backup_free(backup);
 
-    DEBUG("Installed jailbreak successfully.\n");
+    DEBUG("Installed jailbreak successfully. Rebooting the device...\n");
+    WARN("Do not uninstall Cydia Substrate and Substrate Safe Mode in Cydia!\n");
+
+    lockdown = lockdown_open(device);
+    diagnostics_relay_client_t diagnostics_client = NULL;
+    uint16_t diag_port = 0;
+
+    lockdown_start_service(lockdown, "com.apple.mobile.diagnostics_relay", &diag_port);
+
+    desc.port = diag_port;
+    if (diagnostics_relay_client_new(device->client, &desc, &diagnostics_client) == DIAGNOSTICS_RELAY_E_SUCCESS) {
+        diagnostics_relay_restart(diagnostics_client, 0);
+    }
 
     /********************************************************/
     /* move back any remaining dirs via AFC */
@@ -1241,7 +1255,7 @@ int jailbreak_device(const char *uuid)
 
     rmdir_recursive(backup_dir);
 
-    WARN("Done! If the jailbreak is successful, reboot the device.\n");
+    WARN("Done!\n");
  leave:
     afc_client_free(afc);
     afc = NULL;

@@ -24,4 +24,5 @@ libtool
 m4
 .DS_Store
 *kernelcache*
+deps
 var
