@@ -288,12 +288,8 @@ static void idevice_event_cb(const idevice_event_t * event, void *user_data)
     jb_device_event_cb(event, user_data);
 }
 
-typedef struct __csstores {
-    uint32_t csstore_number;
-} csstores_t;
-
-static csstores_t csstores[16];
-static int num_of_csstores = 0;
+static int num_csstores = 0;
+int csstores[16];
 
 int check_consistency(char *product, char *build)
 {
@@ -303,7 +299,7 @@ int check_consistency(char *product, char *build)
     // Verify main directory exists
     snprintf(prodstr, 32, "payload/%s_%s", build, product);
 
-    if (stat(prodstr, &buf) == -1) {
+    if (stat(prodstr, &buf) == -1 && build[0] == '9') {
         ERROR("Failed to open directory \"payload/%s\"\n", prodstr);
     }
     // Seems legit.
@@ -314,8 +310,7 @@ int verify_product(char *product, char *build)
 {
     compatibility_t *curcompat = &compatible_devices[0];
     while ((curcompat) && (curcompat->product != NULL)) {
-        if (!strcmp(curcompat->product, product) &&
-            !strcmp(curcompat->build, build))
+        if (!strcmp(curcompat->product, product) && !strcmp(curcompat->build, build))
             return 0;
         curcompat++;
     }
@@ -329,9 +324,7 @@ int main(int argc, char *argv[])
     char *product = NULL;
     char *build = NULL;
 
-    /********************************************************/
-    /* device detection */
-    /********************************************************/
+    // device detection
     if (!uuid) {
         device = device_create(NULL);
         if (!device) {
@@ -355,10 +348,8 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    if ((lockdown_get_string(lockdown, "HardwareModel", &product) !=
-         LOCKDOWN_E_SUCCESS)
-        || (lockdown_get_string(lockdown, "BuildVersion", &build) !=
-            LOCKDOWN_E_SUCCESS)) {
+    if ((lockdown_get_string(lockdown, "HardwareModel", &product) != LOCKDOWN_E_SUCCESS) ||
+         (lockdown_get_string(lockdown, "BuildVersion", &build) != LOCKDOWN_E_SUCCESS)) {
         ERROR("Could not get device information\n");
         lockdown_free(lockdown);
         device_free(device);
@@ -367,8 +358,8 @@ int main(int argc, char *argv[])
 
     DEBUG("Device is a %s with build %s\n", product, build);
 
-    if (build[0] <= '8') {
-        /* Too lazy to add Mbdx support for 4.3, otherwise this'd all work out of the box. */
+    if (build[0] == '7' || build[0] == '8') {
+        // Too lazy to add Mbdx support for 4.3, otherwise this'd all work out of the box.
         fprintf(stderr,
                 "Installing an untether via this method is not supported for this build.\n"
                 "For build %s, use Legacy iOS Kit to jailbreak.\n",
@@ -393,8 +384,7 @@ int main(int argc, char *argv[])
         if (as) {
             if (strcmp(as, "Unactivated") == 0) {
                 free(as);
-                ERROR
-                    ("The attached device is not activated. You need to activate it before it can be used with UnthreadedJB.\n");
+                ERROR("The attached device is not activated. You need to activate it before it can be used with UnthreadedJB.\n");
                 lockdown_free(lockdown);
                 device_free(device);
                 return -1;
@@ -410,8 +400,7 @@ int main(int argc, char *argv[])
         plist_get_bool_val(pl, &c);
         plist_free(pl);
         if (c) {
-            ERROR
-                ("You have a device backup password set. You need to disable the backup password in iTunes.\n");
+            ERROR("You have a device backup password set. You need to disable the backup password in iTunes.\n");
             lockdown_free(lockdown);
             device_free(device);
             return -1;
@@ -480,21 +469,17 @@ int jailbreak_device(const char *uuid)
     }
 
     strcpy(backup_dir, "/tmp/pris0nbarake");
-    DEBUG("Backing up files to %s\n", backup_dir);
 
-    // Wait for a connection
     DEBUG("Connecting to device...\n");
-
-    int retries = 20;
+    int retries = 10;
     int i = 0;
     while (!connected && (i++ < retries)) {
         sleep(1);
     }
-
     if (!connected) {
         ERROR("Device connection failed\n");
     }
-    // Open a connection to our device
+
     DEBUG("Opening connection to device\n");
     device = device_create(uuid);
     if (device == NULL) {
@@ -508,10 +493,8 @@ int jailbreak_device(const char *uuid)
         return -1;
     }
 
-    if ((lockdown_get_string(lockdown, "HardwareModel", &product) !=
-         LOCKDOWN_E_SUCCESS)
-        || (lockdown_get_string(lockdown, "BuildVersion", &build) !=
-            LOCKDOWN_E_SUCCESS)) {
+    if ((lockdown_get_string(lockdown, "HardwareModel", &product) != LOCKDOWN_E_SUCCESS) ||
+        (lockdown_get_string(lockdown, "BuildVersion", &build) != LOCKDOWN_E_SUCCESS)) {
         ERROR("Could not get device information\n");
         if (product) {
             free(product);
@@ -525,12 +508,9 @@ int jailbreak_device(const char *uuid)
     }
 
     DEBUG("Device info: %s, %s\n", product, build);
-
     DEBUG("Beginning jailbreak, this may take a while...\n");
 
-    /********************************************************/
-    /* start AFC and move dirs out of the way */
-    /********************************************************/
+    // start AFC and move dirs out of the way
     uint16_t port = 0;
     if (lockdown_start_service(lockdown, "com.apple.afc2", &port) == 0) {
         char **fileinfo = NULL;
@@ -599,7 +579,7 @@ int jailbreak_device(const char *uuid)
         // we're good, directory does not exist.
     } else {
         free_dictionary(list);
-        WARN("Looks like you attempted to apply this Jailbreak and it failed. Will try to fix now...\n", 0);
+        WARN("Looks like you attempted to apply this jailbreak and it failed. Will try to fix now...\n", 0);
         sleep(5);
         goto fix;
     }
@@ -617,9 +597,7 @@ int jailbreak_device(const char *uuid)
     afc = NULL;
     // TODO other paths?
 
-    /********************************************************
-     * Get plist from ~/Library/Caches.
-     ********************************************************/
+    // Get plist from ~/Library/Caches
     plist_t mobile_install_plist = NULL;
 
     rmdir_recursive(backup_dir);
@@ -700,6 +678,32 @@ int jailbreak_device(const char *uuid)
             DEBUG("com.apple.mobile.installation.plist is xml\n");
             plist_from_xml(filebuf, newfsize, &mobile_install_plist);
         }
+
+        DIR *d;
+        struct dirent *dir;
+        static char csstorepprefix[] = "com.apple.LaunchServices-";
+        num_csstores = 0;
+
+        d = opendir("var/mobile/Library/Caches");
+        if (d) {
+            while ((dir = readdir(d)) != NULL) {
+                if (strncmp(dir->d_name, csstorepprefix, strlen(csstorepprefix)) == 0) {
+                    if (num_csstores < 16) {
+                        csstores[num_csstores] = strtol(dir->d_name + strlen(csstorepprefix), NULL, 10);
+                        DEBUG("found a csstore! %d - %d\n", num_csstores, csstores[num_csstores]);
+                        num_csstores++;
+                    } else {
+                        WARN("This is weird. More than 16 .csstore files?!\n");
+                    }
+                }
+            }
+            closedir(d);
+        }
+
+        // default to *-045.csstore in case
+        if (num_csstores == 0) {
+            csstores[num_csstores] = 45;
+        }
     }
 
     if (frc) {
@@ -709,34 +713,23 @@ int jailbreak_device(const char *uuid)
     lockdown_free(NULL);
     lockdown = NULL;
 
-    /*****
-     * Modify com.apple.mobile whatever installation plist.
-     *****/
+    // Modify com.apple.mobile whatever installation plist
+    DEBUG("Modifying com.apple.mobile.installation.plist\n");
     assert(mobile_install_plist != NULL);
     {
-        plist_t system_plist =
-            plist_access_path(mobile_install_plist, 2, "System",
-                              "com.apple.DemoApp");
+        plist_t system_plist = plist_access_path(mobile_install_plist, 2, "System", "com.apple.DemoApp");
         if (system_plist) {
             plist_dict_remove_item(system_plist, "ApplicationType");
             plist_dict_remove_item(system_plist, "SBAppTags");
-            plist_replace_item(system_plist, "Path",
-                               plist_new_string("/var/mobile/DemoApp.app"));
+            plist_replace_item(system_plist, "Path", plist_new_string("/var/mobile/DemoApp.app"));
 
             plist_t environment_dict = plist_new_dict();
-            plist_dict_set_item(environment_dict, "LAUNCHD_SOCKET",
-                                   plist_new_string
-                                   ("/private/var/tmp/launchd/sock"));
-            plist_replace_item(system_plist, "EnvironmentVariables",
-                               environment_dict);
+            plist_dict_set_item(environment_dict, "LAUNCHD_SOCKET", plist_new_string("/private/var/tmp/launchd/sock"));
+            plist_replace_item(system_plist, "EnvironmentVariables", environment_dict);
         } else {
             ERROR("Could not find com.apple.DemoApp in plist.\n");
         }
     }
-
-    /********************************************************/
-    /* make backup */
-    /********************************************************/
 
     char *bargv[] = {
         "idevicebackup2",
@@ -744,6 +737,8 @@ int jailbreak_device(const char *uuid)
         backup_dir,
         NULL
     };
+
+    DEBUG("Stage 1: Creating backup\n");
     idevicebackup2(3, bargv);
 
     backup_t *backup = backup_open(backup_dir, uuid);
@@ -752,27 +747,20 @@ int jailbreak_device(const char *uuid)
         return -1;
     }
 
-    /**
-     * Make the backup EVIL. Part 1.
-     */
+    DEBUG("Stage 1: Modifying backup\n");
     {
-        if (backup_mkdir
-            (backup, "MediaDomain", "Media/Recordings", 0755, 501, 501,
-             4) != 0) {
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
         }
 
-        if (backup_symlink
-            (backup, "MediaDomain", "Media/Recordings/.haxx", "/var/mobile",
-             501, 501, 4) != 0) {
+        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx", "/var/mobile", 501, 501, 4) != 0) {
             ERROR("Failed to symlink /var/mobile!\n");
         }
 
-        if (backup_mkdir
-            (backup, "MediaDomain", "Media/Recordings/.haxx/DemoApp.app", 0755,
-             501, 501, 4) != 0) {
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/DemoApp.app", 0755, 501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
         }
+
 #define ADD_FILE(path)                                                                                          \
         if(backup_add_file_from_path(backup, "MediaDomain", "payload/Unthread.app/" path,                       \
                                      "Media/Recordings/.haxx/DemoApp.app/" path, 0100644, 501, 501, 4) != 0) {  \
@@ -798,23 +786,31 @@ int jailbreak_device(const char *uuid)
         char *plist_data = NULL;
         unsigned int plist_size = 0;
 
-        plist_to_xml(mobile_install_plist, &plist_data, &plist_size);
+        plist_to_bin(mobile_install_plist, &plist_data, &plist_size);
 
-        if (backup_add_file_from_data
-            (backup, "MediaDomain", plist_data, plist_size,
+        DEBUG("Adding com.apple.mobile.installation.plist\n");
+        if (backup_add_file_from_data(backup, "MediaDomain", plist_data, plist_size,
              "Media/Recordings/.haxx/Library/Caches/com.apple.mobile.installation.plist",
              0100644, 501, 501, 4) != 0) {
             ERROR("Could not add installation plist!\n");
         }
 
+        // trash /var/mobile/Library/Caches/com.apple.LaunchServices-*.csstore files
+        int i;
+        for (i = 0; i < num_csstores; i++) {
+            char bkfname[512];
+            snprintf(bkfname, 512, "Media/Recordings/.haxx/Library/Caches/com.apple.LaunchServices-%03d.csstore", csstores[i]);
+            DEBUG("Adding %s\n", bkfname);
+            if (backup_add_file_from_data(backup, "MediaDomain", "LOLWUT", 6, bkfname,
+                 0100644, 501, 501, 4) != 0) {
+                ERROR("Could not add csstore!\n");
+            }
+        }
+
         plist_free(mobile_install_plist);
+        backup_free(backup);
     }
 
-    /********************************************************/
-    /* restore backup */
-    /********************************************************/
-
-    DEBUG("Sending initial data. Your device will appear to be restoring a backup, this may also take a while...");
     char *rargv[] = {
         "idevicebackup2",
         "restore",
@@ -824,19 +820,14 @@ int jailbreak_device(const char *uuid)
         backup_dir,
         NULL
     };
-    idevicebackup2(6, rargv);
 
-    backup_free(backup);
+    DEBUG("Stage 1: Restoring backup\n");
+    idevicebackup2(6, rargv);
 
     afc_client_free(afc);
     afc = NULL;
 
     DEBUG("Waiting for reboot, not done yet, don't unplug your device yet!\n");
-
-    /********************************************************/
-    /* wait for device reboot */
-    /********************************************************/
-
     // wait for disconnect
     while (connected) {
         sleep(2);
@@ -850,9 +841,7 @@ int jailbreak_device(const char *uuid)
     DEBUG("Device %s detected. Connecting...\n", uuid);
     sleep(10);
 
-    /********************************************************/
-    /* wait for device to finish booting to springboard */
-    /********************************************************/
+    // wait for device to finish booting to springboard
     device = device_create(uuid);
     if (!device) {
         ERROR("ERROR: Could not connect to device. Aborting.\n");
@@ -868,17 +857,15 @@ int jailbreak_device(const char *uuid)
         return -1;
     }
 
-    retries = 100;
+    retries = 10;
     int done = 0;
     sbservices_client_t sbsc = NULL;
     plist_t state = NULL;
 
     DEBUG("Waiting for SpringBoard...\n");
-
     while (!done && (retries-- > 0)) {
         port = 0;
-        lockdown_start_service(lockdown, "com.apple.springboardservices",
-                               &port);
+        lockdown_start_service(lockdown, "com.apple.springboardservices", &port);
         if (!port) {
             continue;
         }
@@ -889,8 +876,7 @@ int jailbreak_device(const char *uuid)
         if (!sbsc) {
             continue;
         }
-        if (sbservices_get_icon_state(sbsc, &state, "2") ==
-            SBSERVICES_E_SUCCESS) {
+        if (sbservices_get_icon_state(sbsc, &state, "2") == SBSERVICES_E_SUCCESS) {
             plist_free(state);
             state = NULL;
             done = 1;
@@ -905,12 +891,7 @@ int jailbreak_device(const char *uuid)
     lockdown_free(lockdown);
     lockdown = NULL;
 
-    /**
-     * Change to /var/db/timezone thingy.
-     */
-    rmdir_recursive(backup_dir);
-    mkdir(backup_dir, 0755);
-
+    DEBUG("Stage 1: Deleting files\n");
     if (!afc) {
         lockdown = lockdown_open(device);
         port = 0;
@@ -929,6 +910,11 @@ int jailbreak_device(const char *uuid)
         }
     }
     rmdir_recursive_afc(afc, "/Recordings", 1);
+    rmdir_recursive(backup_dir);
+
+    // Change to /var/db/timezone thingy
+    DEBUG("Stage 2: Creating backup 1\n");
+    mkdir(backup_dir, 0755);
     idevicebackup2(3, bargv);
 
     backup = backup_open(backup_dir, uuid);
@@ -937,26 +923,22 @@ int jailbreak_device(const char *uuid)
         return -1;
     }
 
-    /* Make the folders */
+    DEBUG("Stage 2: Modifying backup 1\n");
     {
-        if (backup_mkdir
-            (backup, "MediaDomain", "Media/Recordings", 0755, 501, 501,
-             4) != 0) {
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
         }
 
-        if (backup_symlink
-            (backup, "MediaDomain", "Media/Recordings/.haxx", "/var/db", 501,
-             501, 4) != 0) {
+        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx", "/var/db/", 501, 501, 4) != 0) {
             ERROR("Failed to symlink /var/db!\n");
         }
 
-        if (backup_symlink
-            (backup, "MediaDomain", "Media/Recordings/.haxx/timezone",
-             "/var/tmp/launchd", 501, 501, 4) != 0) {
+        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/timezone", "/var/tmp/launchd", 501, 501, 4) != 0) {
             ERROR("Failed to symlink /var/tmp/launchd!\n");
         }
+        backup_free(backup);
     }
+
     char *rargv2[] = {
         "idevicebackup2",
         "restore",
@@ -965,17 +947,12 @@ int jailbreak_device(const char *uuid)
         backup_dir,
         NULL
     };
+
+    DEBUG("Stage 2: Restoring backup 1\n");
     idevicebackup2(5, rargv2);
 
-    backup_free(backup);
-
-    /*
-     * Crash lockdownd.
-     */
+    DEBUG("Stage 2: Crash lockdownd\n");
     stroke_lockdownd(device);
-
-    rmdir_recursive(backup_dir);
-    mkdir(backup_dir, 0755);
 
     if (!afc) {
         lockdown = lockdown_open(device);
@@ -994,7 +971,13 @@ int jailbreak_device(const char *uuid)
             goto leave;
         }
     }
+
+    DEBUG("Stage 2: Deleting files\n");
     rmdir_recursive_afc(afc, "/Recordings", 1);
+    rmdir_recursive(backup_dir);
+
+    DEBUG("Stage 2: Creating backup 2\n");
+    mkdir(backup_dir, 0755);
     idevicebackup2(3, bargv);
 
     backup = backup_open(backup_dir, uuid);
@@ -1003,52 +986,62 @@ int jailbreak_device(const char *uuid)
         return -1;
     }
 
-    /*
-     * Do it again.
-     */
+    // Do it again
+    DEBUG("Stage 2: Modifying backup 2\n");
     {
-        if (backup_mkdir
-            (backup, "MediaDomain", "Media/Recordings", 0755, 501, 501,
-             4) != 0) {
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
         }
 
-        if (backup_symlink
-            (backup, "MediaDomain", "Media/Recordings/.haxx", "/var/db", 501,
-             501, 4) != 0) {
+        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx", "/var/db", 501, 501, 4) != 0) {
             ERROR("Failed to symlink /var/db!\n");
         }
 
-        if (backup_symlink
-            (backup, "MediaDomain", "Media/Recordings/.haxx/timezone",
-             "/var/tmp/launchd/sock", 501, 501, 4) != 0) {
+        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/timezone", "/var/tmp/launchd/sock", 501, 501, 4) != 0) {
             ERROR("Failed to symlink /var/tmp/launchd/sock!\n");
         }
+        backup_free(backup);
     }
+    /*
+    DEBUG("Stage 2: Modifying backup\n");
+    int res = 0;
+    backup_file_t* bf = backup_get_file(backup, "MediaDomain", "Media/Recordings/.haxx/timezone");
+        if (bf) {
+                backup_file_set_target(bf, "/var/tmp/launchd/sock");
+                backup_file_set_mode(bf, 0120644);
+                backup_file_set_uid(bf, 0);
+                backup_file_set_gid(bf, 0);
+                unsigned int tm = (unsigned int)(time(NULL));
+                backup_file_set_time1(bf, tm);
+                backup_file_set_time2(bf, tm);
+                backup_file_set_time3(bf, tm);
+                backup_file_set_flag(bf, 0);
+
+                if (backup_update_file(backup, bf) < 0) {
+                        res = -1;
+                }
+                backup_file_free(bf);
+        }
+    if (res < 0) {
+        ERROR("Could not add file to backup\n");
+    }
+    */
+    DEBUG("Stage 2: Restoring backup 2\n");
     idevicebackup2(5, rargv2);
 
-    backup_free(backup);
-
-    /*
-     * Crash lockdownd.
-     */
+    DEBUG("Stage 2: Crash lockdownd\n");
     stroke_lockdownd(device);
-
     /*
-     * Now, the lockdown socket is 777.
-     * XXX: Replace getchar() with stat("/var/mobile/Media/mount.stderr") or whatever.
-     */
+    // remove timezone symlink
+    DEBUG("Stage 2.3: Modifying backup\n");
+    bf = backup_get_file(backup, "MediaDomain", "Media/Recordings/.haxx2/timezone");
+    backup_remove_file(backup, bf);
+    */
+    // Now, the lockdown socket is 777
     WARN("Please run the #Unthread application to remount the root filesystem as read/write. Hit a key to continue when done.\n");
     WARN("Yes, the app is supposed to crash. Don't worry about it.\n");
     getchar();
 
-    /*
-     * Goody, goody. Let's copy everything over!
-     */
-
-    rmdir_recursive(backup_dir);
-    mkdir(backup_dir, 0755);
-
     if (!afc) {
         lockdown = lockdown_open(device);
         port = 0;
@@ -1066,18 +1059,23 @@ int jailbreak_device(const char *uuid)
             goto leave;
         }
     }
+    DEBUG("Stage 2: Deleting files\n");
     rmdir_recursive_afc(afc, "/Recordings", 1);
+    rmdir_recursive(backup_dir);
+
+    DEBUG("Stage 3: Creating backup\n");
+    mkdir(backup_dir, 0755);
     idevicebackup2(3, bargv);
 
+    // Goody, goody. Let's copy everything over!
     backup = backup_open(backup_dir, uuid);
     if (!backup) {
         fprintf(stderr, "ERROR: failed to open backup\n");
         return -1;
     }
 
-    /*
-     * Do it again.
-     */
+    // Do it again
+    DEBUG("Stage 3: Modifying backup\n");
     {
         if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
@@ -1087,10 +1085,15 @@ int jailbreak_device(const char *uuid)
             ERROR("Failed to symlink root!\n");
         }
 
+        //if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/evasi0n", 0755, 0, 0, 4) != 0) {
         if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/unthreadedjb", 0755, 0, 0, 4) != 0) {
             ERROR("Could not make var/unthreadedjb folder\n");
         }
-
+        /*
+        if (backup_mkdir(backup, "MediaDomain", "Media/evasi0n-install", 0755, 0, 0, 4) != 0) {
+            ERROR("Could not make evasi0n-install folder\n");
+        }
+        */
         if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/root", 0755, 0, 0, 4) != 0) {
             ERROR("Could not make var/root folder\n");
         }
@@ -1112,31 +1115,49 @@ int jailbreak_device(const char *uuid)
             char untether_deb_path[128];
 
             snprintf(jb_path, 128, "payload/%s_%s/jb", build, product);
+            //snprintf(jb_path, 128, "payload/evasi0n/evasi0n");
 
             if (backup_add_file_from_path(backup, "MediaDomain", "payload/launchd.conf",
                  "Media/Recordings/.haxx/var/unthreadedjb/launchd.conf",
+                 //"Media/Recordings/.haxx/var/evasi0n/launchd.conf",
                  0100644, 0, 0, 4) != 0) {
                 ERROR("Could not add launchd.conf\n");
             }
             if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/private/etc/launchd.conf",
+                 //"/private/var/evasi0n/launchd.conf", 0, 0, 4) != 0) {
                  "/private/var/unthreadedjb/launchd.conf", 0, 0, 4) != 0) {
                 ERROR("Failed to symlink launchd.conf!\n");
             }
+            /*
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/evasi0n/meow",
+                 "Media/Recordings/.haxx/var/evasi0n/meow",
+                 0100644, 0, 0, 4) != 0) {
+                ERROR("Could not add meow\n");
+            }
+            if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/bin/meow",
+                 "/private/var/evasi0n/meow", 0, 0, 4) != 0) {
+                ERROR("Failed to symlink meow!\n");
+            }
+            */
             if (backup_add_file_from_path(backup, "MediaDomain", jb_path,
                  "Media/Recordings/.haxx/var/unthreadedjb/jb",
+                 //"Media/Recordings/.haxx/var/evasi0n/evasi0n",
                  0100755, 0, 0, 4) != 0) {
                 ERROR("Could not add jb\n");
             }
             if (backup_add_file_from_path(backup, "MediaDomain", "payload/amfi.dylib",
                  "Media/Recordings/.haxx/var/unthreadedjb/amfi.dylib",
+                 //"Media/Recordings/.haxx/var/evasi0n/amfi.dylib",
                  0100755, 0, 0, 4) != 0) {
                 ERROR("Could not add amfi\n");
             }
             if (backup_add_file_from_path(backup, "MediaDomain", "payload/Cydia.tar",
                   "Media/Recordings/.haxx/var/unthreadedjb/Cydia.tar", 0100644,
+                  //"Media/evasi0n-install/Cydia.tar", 0100644,
                   0, 0, 4) != 0) {
                 ERROR("Could not add Cydia\n");
             }
+
             if (backup_add_file_from_path(backup, "MediaDomain", "payload/substrate4g1lbert.deb",
                  "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/substrate4g1lbert.deb",
                  0100755, 0, 0, 4) != 0) {
@@ -1172,28 +1193,41 @@ int jailbreak_device(const char *uuid)
                 }
             }
         }
+        backup_free(backup);
     }
-    idevicebackup2(5, rargv2);
 
-    backup_free(backup);
+    DEBUG("Stage 3: Restoring backup\n");
+    idevicebackup2(6, rargv);
+
+    afc_client_free(afc);
+    afc = NULL;
+
+    DEBUG("Waiting for reboot, not done yet, don't unplug your device yet!\n");
+    // wait for disconnect
+    while (connected) {
+        sleep(2);
+    }
+    DEBUG("Device %s disconnected\n", uuid);
+
+    // wait for device to connect
+    while (!connected) {
+        sleep(2);
+    }
+    DEBUG("Device %s detected. Connecting...\n", uuid);
+    sleep(10);
+    device = device_create(uuid);
+    if (!device) {
+        ERROR("ERROR: Could not connect to device. Aborting.\n");
+        // we can't recover since the device connection failed...
+        return -1;
+    }
+    // give it a bit to run
+    DEBUG("Don't unplug your device yet!\n");
+    sleep(30);
 
     DEBUG("Installed jailbreak successfully. Rebooting the device...\n");
-    WARN("Do not uninstall Cydia Substrate and Substrate Safe Mode in Cydia!\n");
 
-    lockdown = lockdown_open(device);
-    diagnostics_relay_client_t diagnostics_client = NULL;
-    uint16_t diag_port = 0;
-
-    lockdown_start_service(lockdown, "com.apple.mobile.diagnostics_relay", &diag_port);
-
-    desc.port = diag_port;
-    if (diagnostics_relay_client_new(device->client, &desc, &diagnostics_client) == DIAGNOSTICS_RELAY_E_SUCCESS) {
-        diagnostics_relay_restart(diagnostics_client, 0);
-    }
-
-    /********************************************************/
-    /* move back any remaining dirs via AFC */
-    /********************************************************/
+    // move back any remaining dirs via AFC
  fix:
     DEBUG("Moving files...\n", 80);
     if (!afc) {
@@ -1254,6 +1288,19 @@ int jailbreak_device(const char *uuid)
     }
 
     rmdir_recursive(backup_dir);
+
+    // reboot device
+    lockdown = lockdown_open(device);
+    diagnostics_relay_client_t diagnostics_client = NULL;
+    uint16_t diag_port = 0;
+
+    lockdown_start_service(lockdown, "com.apple.mobile.diagnostics_relay", &diag_port);
+    lockdown_free(lockdown);
+
+    desc.port = diag_port;
+    if (diagnostics_relay_client_new(device->client, &desc, &diagnostics_client) == DIAGNOSTICS_RELAY_E_SUCCESS) {
+        diagnostics_relay_restart(diagnostics_client, 0);
+    }
 
     WARN("Done!\n");
  leave:
