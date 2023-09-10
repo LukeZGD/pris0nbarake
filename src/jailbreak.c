@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <dirent.h>
+#include <time.h>
 
 #include <signal.h>
 #include <plist/plist.h>
@@ -45,6 +46,7 @@
 #include <zlib.h>
 
 #include "common.h"
+#include "backup_kbag.h"
 
 #define AFCTMP     "HackStore"
 
@@ -116,8 +118,221 @@ compatibility_t compatible_devices[] = {
     {"N88AP", "9A334"},
     {"K48AP", "9A334"},
 
+    {"K93AP", "10A403"},
+    {"K94AP", "10A403"},
+    {"K95AP", "10A403"},
+    {"K93aAP", "10A403"},
+    {"J1AP", "10A403"},
+    {"J2AP", "10A403"},
+    {"J2aAP", "10A403"},
+    {"N88AP", "10A403"},
+    {"N90AP", "10A403"},
+    {"N90BAP", "10A403"},
+    {"N92AP", "10A403"},
+    {"N94AP", "10A403"},
+    {"N81AP", "10A403"},
+
+    {"N41AP", "10A405"},
+    {"N42AP", "10A405"},
+
+    {"N78AP", "10A406"},
+    {"P105AP", "10A406"},
+
+    {"P101AP", "10A407"},
+
+    {"K93AP", "10A523"},
+    {"K94AP", "10A523"},
+    {"K95AP", "10A523"},
+    {"K93aAP", "10A523"},
+    {"J1AP", "10A523"},
+    {"J2AP", "10A523"},
+    {"J2aAP", "10A523"},
+    {"P101AP", "10A523"},
+    {"P105AP", "10A523"},
+    {"N88AP", "10A523"},
+    {"N90AP", "10A523"},
+    {"N90BAP", "10A523"},
+    {"N92AP", "10A523"},
+    {"N94AP", "10A523"},
+    {"N81AP", "10A523"},
+    {"N78AP", "10A523"},
+
+    {"P102AP", "10A8426"},
+    {"P103AP", "10A8426"},
+    {"P106AP", "10A8426"},
+    {"P107AP", "10A8426"},
+
+    {"N41AP", "10A525"},
+    {"N42AP", "10A525"},
+
+    {"P105AP", "10A550"},
+
+    {"P106AP", "10A8550"},
+    {"P107AP", "10A8550"},
+
+    {"N41AP", "10A551"},
+    {"N42AP", "10A551"},
+
+    {"K93AP", "10B141"},
+    {"K94AP", "10B141"},
+    {"K95AP", "10B141"},
+    {"K93aAP", "10B141"},
+    {"J1AP", "10B141"},
+    {"J2AP", "10B141"},
+    {"J2aAP", "10B141"},
+    {"P101AP", "10B141"},
+    {"P102AP", "10B141"},
+    {"P103AP", "10B141"},
+    {"P105AP", "10B141"},
+    {"P106AP", "10B141"},
+    {"P107AP", "10B141"},
+    {"N88AP", "10B141"},
+    {"N92AP", "10B141"},
+    {"N78AP", "10B141"},
+
+    {"N94AP", "10B142"},
+
+    {"N41AP", "10B143"},
+    {"N42AP", "10B143"},
+
+    {"N90AP", "10B144"},
+    {"N90BAP", "10B144"},
+    {"N81AP", "10B144"},
+
+    {"N94AP", "10B145"},
+
+    {"K93AP", "10B146"},
+    {"K94AP", "10B146"},
+    {"K95AP", "10B146"},
+    {"K93aAP", "10B146"},
+    {"J1AP", "10B146"},
+    {"J2AP", "10B146"},
+    {"J2aAP", "10B146"},
+    {"P101AP", "10B146"},
+    {"P105AP", "10B146"},
+    {"N88AP", "10B146"},
+    {"N90AP", "10B146"},
+    {"N90BAP", "10B146"},
+    {"N92AP", "10B146"},
+    {"N94AP", "10B146"},
+    {"N81AP", "10B146"},
+    {"N78AP", "10B146"},
+
+    {"P102AP", "10B147"},
+    {"P103AP", "10B147"},
+    {"P106AP", "10B147"},
+    {"P107AP", "10B147"},
+    {"N41AP", "10B147"},
+    {"N42AP", "10B147"},
+
     {NULL, NULL}
 };
+
+static char* gen_uuid() /*{{{*/
+{
+    char *uuid = (char *) malloc(sizeof(char) * 37);
+    const char *chars = "ABCDEF0123456789";
+    srand(time(NULL));
+    int i = 0;
+
+    for (i = 0; i < 36; i++) {
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            uuid[i] = '-';
+            continue;
+        } else {
+            uuid[i] = chars[rand()%16];
+        }
+    }
+    /* make it a real string */
+    uuid[36] = '\0';
+    return uuid;
+} /*}}}*/
+
+static int inode = 54327;
+
+static int trash_var_backup(const char* path, const char* udid) /*{{{*/
+{
+    int res = 0;
+    char dstf[512];
+
+    strcpy(dstf, path);
+    strcat(dstf, "/");
+    strcat(dstf, udid);
+    strcat(dstf, "/Manifest.mbdb");
+
+    if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
+        fprintf(stderr, "Could not write file '%s'!\n", dstf);
+        return -1;
+    }
+
+    backup_t* backup = backup_open(path, udid);
+    if (!backup) {
+        fprintf(stderr, "ERROR: could not open backup\n");
+        return -1;
+    }
+
+    if (backup_mkdir(backup, "MediaDomain", "Media", 0755, 501, 501, 4) != 0) {
+        fprintf(stderr, "Couldn't add dir to backup\n");
+        return -1;
+    }
+    if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
+        fprintf(stderr, "Couldn't add dir to backup\n");
+        return -1;
+    }
+
+    // *** magic symlink
+    if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx", "/var", 501, 501, 4) != 0) {
+        fprintf(stderr, "Couldn't add file to backup\n");
+        return -1;
+    }
+
+    // we add this so the device doesn't restore any weird stuff.
+    backup_file_t* bf = backup_file_create(NULL);
+        if (bf) {
+                backup_file_set_domain(bf, "MediaDomain");
+                backup_file_set_path(bf, "Media/Recordings/.haxx/backup");
+                backup_file_set_target_with_length(bf, "\0", 1);
+                backup_file_set_mode(bf, 0120644);
+                backup_file_set_inode(bf, inode++);
+                backup_file_set_uid(bf, 0);
+                backup_file_set_gid(bf, 0);
+                unsigned int tm = (unsigned int)(time(NULL));
+                backup_file_set_time1(bf, tm);
+                backup_file_set_time2(bf, tm);
+                backup_file_set_time3(bf, tm);
+                backup_file_set_flag(bf, 0);
+
+                if (backup_update_file(backup, bf) < 0) {
+            res = -1;
+                } else {
+            res = 0;
+        }
+                backup_file_free(bf);
+        }
+    if (res < 0) {
+        fprintf(stderr, "Error: Couldn't add file to backup!\n");
+        return -1;
+    }
+
+    // *** save backup ***
+    backup_write_mbdb(backup);
+    backup_free(backup);
+
+    char* rargv[] = {
+        "idevicebackup2",
+        "restore",
+        "--system",
+        "--settings",
+        (char*)path,
+        NULL
+    };
+    res = idevicebackup2(5, rargv);
+    if (res != 0) {
+        return res;
+    }
+
+    return res;
+} /*}}}*/
 
 static int cpio_get_file_name_length(void *cpio)
 {
@@ -493,6 +708,18 @@ int jailbreak_device(const char *uuid)
         return -1;
     }
 
+    plist_t pl_build = NULL;
+    plist_t pl_devname = NULL;
+    plist_t pl_ptype = NULL;
+    plist_t pl_pver = NULL;
+    plist_t pl_snum = NULL;
+
+    lockdown_get_value(lockdown, NULL, "BuildVersion", &pl_build);
+    lockdown_get_value(lockdown, NULL, "DeviceName", &pl_devname);
+    lockdown_get_value(lockdown, NULL, "ProductType", &pl_ptype);
+    lockdown_get_value(lockdown, NULL, "ProductVersion", &pl_pver);
+    lockdown_get_value(lockdown, NULL, "SerialNumber", &pl_snum);
+
     if ((lockdown_get_string(lockdown, "HardwareModel", &product) != LOCKDOWN_E_SUCCESS) ||
         (lockdown_get_string(lockdown, "BuildVersion", &build) != LOCKDOWN_E_SUCCESS)) {
         ERROR("Could not get device information\n");
@@ -738,17 +965,100 @@ int jailbreak_device(const char *uuid)
         NULL
     };
 
+    char HKPTMP[512];
+    strcpy(HKPTMP, backup_dir);
+    strcat(HKPTMP, "/");
+    strcat(HKPTMP, uuid);
+    mkdir(HKPTMP, 0755);
+
+    char dstf[512];
+
+    // create Manifest.plist
+    strcpy(dstf, HKPTMP);
+    strcat(dstf, "/Manifest.plist");
+
+    plist_t mnf = plist_new_dict();
+    plist_dict_set_item(mnf, "Applications", plist_new_array());
+    plist_dict_set_item(mnf, "BackupKeyBag", plist_new_data((char*)backup_kbag, sizeof(backup_kbag)));
+    plist_dict_set_item(mnf, "Date", plist_new_date(time(NULL), 0));
+    plist_dict_set_item(mnf, "IsEncrypted", plist_new_bool(0));
+    plist_t lckd = plist_new_dict();
+    plist_dict_set_item(lckd, "BuildVersion", pl_build);
+    plist_dict_set_item(lckd, "DeviceName", pl_devname);
+    plist_dict_set_item(lckd, "ProductType", pl_ptype);
+    plist_dict_set_item(lckd, "ProductVersion", pl_pver);
+    plist_dict_set_item(lckd, "SerialNumber", pl_snum);
+    plist_dict_set_item(lckd, "UniqueDeviceID", plist_new_string(uuid));
+
+    plist_t ccdict = plist_new_dict();
+    plist_dict_set_item(ccdict, "ShouldSubmit", plist_new_bool(0));
+    plist_dict_set_item(lckd, "com.apple.MobileDeviceCrashCopy", ccdict);
+
+    plist_t ibdict = plist_new_dict();
+    char hostname[256];
+    if (gethostname(hostname, 256) != 0) {
+        strcpy(hostname, "localhost");
+    }
+    plist_dict_set_item(ibdict, "LastBackupComputerName", plist_new_string(hostname));
+    plist_dict_set_item(ibdict, "LastBackupComputerType", plist_new_string("Mac"));
+    plist_dict_set_item(lckd, "com.apple.iTunes.backup", ibdict);
+
+    plist_dict_set_item(mnf, "Lockdown", lckd);
+    plist_dict_set_item(mnf, "SystemDomainsVersion", plist_new_string("12.0"));
+    plist_dict_set_item(mnf, "Version", plist_new_string("9.0"));
+    plist_dict_set_item(mnf, "WasPasscodeSet", plist_new_bool(0));
+
+    DEBUG("Writing %s\n", dstf);
+    char *mnf_buf = NULL;
+    uint32_t mnf_len;
+    plist_to_bin(mnf, &mnf_buf, &mnf_len);
+    if (file_write(dstf, mnf_buf, mnf_len) < 0) {
+        ERROR("Failed to write plist\n");
+    }
+    plist_free(mnf);
+
+    // create Status.plist
+    strcpy(dstf, HKPTMP);
+    strcat(dstf, "/Status.plist");
+
+    plist_t stt = plist_new_dict();
+    plist_dict_set_item(stt, "BackupState", plist_new_string("new"));
+    plist_dict_set_item(stt, "Date", plist_new_date(time(NULL), 0));
+    plist_dict_set_item(stt, "IsFullBackup", plist_new_bool(1));
+    plist_dict_set_item(stt, "SnapshotState", plist_new_string("finished"));
+    char* backup_uuid = gen_uuid();
+    plist_dict_set_item(stt, "UUID", plist_new_string(backup_uuid));
+    free(backup_uuid);
+    plist_dict_set_item(stt, "Version", plist_new_string("2.4"));
+
+    DEBUG("Writing %s\n", dstf);
+    char *stt_buf = NULL;
+    uint32_t stt_len;
+    plist_to_bin(stt, &stt_buf, &stt_len);
+    if (file_write(dstf, stt_buf, stt_len) < 0) {
+        ERROR("Failed to write plist\n");
+    }
+    plist_free(stt);
+
     DEBUG("Stage 1: Creating backup\n");
-    idevicebackup2(3, bargv);
+    strcpy(dstf, HKPTMP);
+    strcat(dstf, "/Manifest.mbdb");
+    DEBUG("Writing %s\n", dstf);
+    if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
+        ERROR("Could not write file '%s'!\n", dstf);
+    }
 
     backup_t *backup = backup_open(backup_dir, uuid);
     if (!backup) {
-        fprintf(stderr, "ERROR: failed to open backup\n");
-        return -1;
+        ERROR("failed to open backup\n");
     }
 
     DEBUG("Stage 1: Modifying backup\n");
     {
+        if (backup_mkdir(backup, "MediaDomain", "Media", 0755, 501, 501, 4) != 0) {
+            ERROR("Could not make folder\n");
+        }
+
         if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
         }
@@ -808,6 +1118,7 @@ int jailbreak_device(const char *uuid)
         }
 
         plist_free(mobile_install_plist);
+        backup_write_mbdb(backup);
         backup_free(backup);
     }
 
@@ -891,40 +1202,28 @@ int jailbreak_device(const char *uuid)
     lockdown_free(lockdown);
     lockdown = NULL;
 
-    DEBUG("Stage 1: Deleting files\n");
-    if (!afc) {
-        lockdown = lockdown_open(device);
-        port = 0;
-        if (lockdown_start_service(lockdown, "com.apple.afc", &port) != 0) {
-            WARN("Could not start AFC service. Aborting.\n");
-            lockdown_free(lockdown);
-            goto leave;
-        }
-        lockdown_free(lockdown);
-
-        desc.port = port;
-        afc_client_new(device->client, &desc, &afc);
-        if (!afc) {
-            WARN("Could not connect to AFC. Aborting.\n");
-            goto leave;
-        }
-    }
-    rmdir_recursive_afc(afc, "/Recordings", 1);
-    rmdir_recursive(backup_dir);
+    trash_var_backup(backup_dir, uuid);
 
     // Change to /var/db/timezone thingy
     DEBUG("Stage 2: Creating backup 1\n");
-    mkdir(backup_dir, 0755);
-    idevicebackup2(3, bargv);
+    strcpy(dstf, HKPTMP);
+    strcat(dstf, "/Manifest.mbdb");
+
+    if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
+        ERROR("Could not write file '%s'!\n", dstf);
+    }
 
     backup = backup_open(backup_dir, uuid);
     if (!backup) {
-        fprintf(stderr, "ERROR: failed to open backup\n");
-        return -1;
+        ERROR("failed to open backup\n");
     }
 
     DEBUG("Stage 2: Modifying backup 1\n");
     {
+        if (backup_mkdir(backup, "MediaDomain", "Media", 0755, 501, 501, 4) != 0) {
+            ERROR("Could not make folder\n");
+        }
+
         if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
         }
@@ -936,7 +1235,7 @@ int jailbreak_device(const char *uuid)
         if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/timezone", "/var/tmp/launchd", 501, 501, 4) != 0) {
             ERROR("Failed to symlink /var/tmp/launchd!\n");
         }
-        backup_free(backup);
+        backup_write_mbdb(backup);
     }
 
     char *rargv2[] = {
@@ -972,38 +1271,7 @@ int jailbreak_device(const char *uuid)
         }
     }
 
-    DEBUG("Stage 2: Deleting files\n");
-    rmdir_recursive_afc(afc, "/Recordings", 1);
-    rmdir_recursive(backup_dir);
-
-    DEBUG("Stage 2: Creating backup 2\n");
-    mkdir(backup_dir, 0755);
-    idevicebackup2(3, bargv);
-
-    backup = backup_open(backup_dir, uuid);
-    if (!backup) {
-        fprintf(stderr, "ERROR: failed to open backup\n");
-        return -1;
-    }
-
-    // Do it again
     DEBUG("Stage 2: Modifying backup 2\n");
-    {
-        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
-            ERROR("Could not make folder\n");
-        }
-
-        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx", "/var/db", 501, 501, 4) != 0) {
-            ERROR("Failed to symlink /var/db!\n");
-        }
-
-        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/timezone", "/var/tmp/launchd/sock", 501, 501, 4) != 0) {
-            ERROR("Failed to symlink /var/tmp/launchd/sock!\n");
-        }
-        backup_free(backup);
-    }
-    /*
-    DEBUG("Stage 2: Modifying backup\n");
     int res = 0;
     backup_file_t* bf = backup_get_file(backup, "MediaDomain", "Media/Recordings/.haxx/timezone");
         if (bf) {
@@ -1025,22 +1293,45 @@ int jailbreak_device(const char *uuid)
     if (res < 0) {
         ERROR("Could not add file to backup\n");
     }
-    */
+    backup_write_mbdb(backup);
+
     DEBUG("Stage 2: Restoring backup 2\n");
     idevicebackup2(5, rargv2);
 
     DEBUG("Stage 2: Crash lockdownd\n");
     stroke_lockdownd(device);
-    /*
+
     // remove timezone symlink
-    DEBUG("Stage 2.3: Modifying backup\n");
-    bf = backup_get_file(backup, "MediaDomain", "Media/Recordings/.haxx2/timezone");
-    backup_remove_file(backup, bf);
-    */
-    // Now, the lockdown socket is 777
-    WARN("Please run the #Unthread application to remount the root filesystem as read/write. Hit a key to continue when done.\n");
-    WARN("Yes, the app is supposed to crash. Don't worry about it.\n");
-    getchar();
+    res = -1;
+    DEBUG("Stage 2: Modifying backup 3\n");
+    bf = backup_get_file(backup, "MediaDomain", "Media/Recordings/.haxx/timezone");
+        if (bf) {
+                backup_file_set_target_with_length(bf, "\0", 1);
+                backup_file_set_mode(bf, 0120644);
+                backup_file_set_uid(bf, 0);
+                backup_file_set_gid(bf, 0);
+                unsigned int tm = (unsigned int)(time(NULL));
+                backup_file_set_time1(bf, tm);
+                backup_file_set_time2(bf, tm);
+                backup_file_set_time3(bf, tm);
+                backup_file_set_flag(bf, 0);
+
+                if (backup_update_file(backup, bf) < 0) {
+            res = -1;
+        } else {
+            res = 0;
+        }
+                backup_file_free(bf);
+        }
+    if (res < 0) {
+        ERROR("Couldn't add file to backup!\n");
+    }
+
+    backup_write_mbdb(backup);
+    backup_free(backup);
+
+    DEBUG("Stage 2: Restoring backup 3\n");
+    idevicebackup2(5, rargv2);
 
     if (!afc) {
         lockdown = lockdown_open(device);
@@ -1059,24 +1350,101 @@ int jailbreak_device(const char *uuid)
             goto leave;
         }
     }
-    DEBUG("Stage 2: Deleting files\n");
-    rmdir_recursive_afc(afc, "/Recordings", 1);
-    rmdir_recursive(backup_dir);
 
-    DEBUG("Stage 3: Creating backup\n");
-    mkdir(backup_dir, 0755);
-    idevicebackup2(3, bargv);
+    afc_remove_path(afc, "/mount.stderr");
+    afc_remove_path(afc, "/mount.stdout");
 
-    // Goody, goody. Let's copy everything over!
+    // Now, the lockdown socket is 777
+    WARN("Please run the #Unthread application to remount the root filesystem as read/write.\n");
+    WARN("Yes, the app is supposed to crash. Don't worry about it.\n");
+    done = 0;
+    while (done != 1) {
+        char** fi = NULL;
+        if (afc_get_file_info(afc, "/mount.stderr", &fi) == AFC_E_SUCCESS) {
+            done = 1;
+            free_dictionary(fi);
+            break;
+        }
+        sleep(2);
+    }
+
+    DEBUG("Stage 3: Creating backup 1\n");
+    strcpy(dstf, HKPTMP);
+    strcat(dstf, "/Manifest.mbdb");
+
+    if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
+        ERROR("Could not write file '%s'!\n", dstf);
+    }
+
     backup = backup_open(backup_dir, uuid);
     if (!backup) {
-        fprintf(stderr, "ERROR: failed to open backup\n");
-        return -1;
+        ERROR("failed to open backup\n");
+    }
+
+    DEBUG("Stage 3: Modifying backup 1\n");
+    {
+        if (backup_mkdir(backup, "MediaDomain", "Media", 0755, 501, 501, 4) != 0) {
+            ERROR("Could not make folder\n");
+        }
+
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
+            ERROR("Could not make folder\n");
+        }
+
+        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx", "/var", 501, 501, 4) != 0) {
+            ERROR("Failed to symlink root!\n");
+        }
+
+        if (build[0] == '1') {
+            if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/mobile/Media", 0755, 501, 501, 4) != 0) {
+                ERROR("Could not make evasi0n-install folder\n");
+            }
+
+            if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/mobile/Media/evasi0n-install", 0755, 501, 501, 4) != 0) {
+                ERROR("Could not make evasi0n-install folder\n");
+            }
+        }
+
+        // restore /var/db/timezone folder
+        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/db/timezone", 0777, 0, 0, 4) != 0) {
+            ERROR("Couldn't add dir to backup\n");
+        }
+
+        // - Replace /private/var/mobile/DemoApp.app/DemoApp with symlink to /
+        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/mobile/DemoApp.app/DemoApp", "/", 0, 0, 4) != 0) {
+            ERROR("Error: Couldn't add file to backup!\n");
+        }
+
+        backup_write_mbdb(backup);
+        backup_free(backup);
+    }
+
+    DEBUG("Stage 3: Restoring backup 1\n");
+    idevicebackup2(5, rargv2);
+
+    DEBUG("Stage 3: Giving it 10 seconds for root filesystem to remount\n");
+    sleep(10);
+
+    DEBUG("Stage 3: Creating backup 2\n");
+    strcpy(dstf, HKPTMP);
+    strcat(dstf, "/Manifest.mbdb");
+
+    if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
+        ERROR("Could not write file '%s'!\n", dstf);
+    }
+
+    backup = backup_open(backup_dir, uuid);
+    if (!backup) {
+        ERROR("failed to open backup\n");
     }
 
     // Do it again
-    DEBUG("Stage 3: Modifying backup\n");
+    DEBUG("Stage 3: Modifying backup 2\n");
     {
+        if (backup_mkdir(backup, "MediaDomain", "Media", 0755, 501, 501, 4) != 0) {
+            ERROR("Could not make folder\n");
+        }
+
         if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
         }
@@ -1085,15 +1453,6 @@ int jailbreak_device(const char *uuid)
             ERROR("Failed to symlink root!\n");
         }
 
-        //if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/evasi0n", 0755, 0, 0, 4) != 0) {
-        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/unthreadedjb", 0755, 0, 0, 4) != 0) {
-            ERROR("Could not make var/unthreadedjb folder\n");
-        }
-        /*
-        if (backup_mkdir(backup, "MediaDomain", "Media/evasi0n-install", 0755, 0, 0, 4) != 0) {
-            ERROR("Could not make evasi0n-install folder\n");
-        }
-        */
         if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/root", 0755, 0, 0, 4) != 0) {
             ERROR("Could not make var/root folder\n");
         }
@@ -1110,64 +1469,120 @@ int jailbreak_device(const char *uuid)
             ERROR("Could not make var/root/Media/Cydia/AutoInstall folder\n");
         }
 
-        {
-            char jb_path[128];
-            char untether_deb_path[128];
+        char jb_path[128];
+        char untether_deb_path[128];
 
-            snprintf(jb_path, 128, "payload/%s_%s/jb", build, product);
-            //snprintf(jb_path, 128, "payload/evasi0n/evasi0n");
+        if (build[0] == '1') {
+            // ios 6.0-6.1.2 evasi0n
+            if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/evasi0n", 0755, 0, 0, 4) != 0) {
+                ERROR("Could not make var/evasi0n folder\n");
+            }
 
-            if (backup_add_file_from_path(backup, "MediaDomain", "payload/launchd.conf",
-                 "Media/Recordings/.haxx/var/unthreadedjb/launchd.conf",
-                 //"Media/Recordings/.haxx/var/evasi0n/launchd.conf",
+            snprintf(jb_path, 128, "payload/evasi0n/evasi0n");
+
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/evasi0n/launchd.conf",
+                 "Media/Recordings/.haxx/var/evasi0n/launchd.conf",
                  0100644, 0, 0, 4) != 0) {
                 ERROR("Could not add launchd.conf\n");
             }
+
             if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/private/etc/launchd.conf",
-                 //"/private/var/evasi0n/launchd.conf", 0, 0, 4) != 0) {
-                 "/private/var/unthreadedjb/launchd.conf", 0, 0, 4) != 0) {
+                 "/private/var/evasi0n/launchd.conf", 501, 501, 4) != 0) {
                 ERROR("Failed to symlink launchd.conf!\n");
             }
-            /*
-            if (backup_add_file_from_path(backup, "MediaDomain", "payload/evasi0n/meow",
-                 "Media/Recordings/.haxx/var/evasi0n/meow",
-                 0100644, 0, 0, 4) != 0) {
-                ERROR("Could not add meow\n");
-            }
-            if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/bin/meow",
-                 "/private/var/evasi0n/meow", 0, 0, 4) != 0) {
-                ERROR("Failed to symlink meow!\n");
-            }
-            */
-            if (backup_add_file_from_path(backup, "MediaDomain", jb_path,
-                 "Media/Recordings/.haxx/var/unthreadedjb/jb",
-                 //"Media/Recordings/.haxx/var/evasi0n/evasi0n",
-                 0100755, 0, 0, 4) != 0) {
-                ERROR("Could not add jb\n");
-            }
-            if (backup_add_file_from_path(backup, "MediaDomain", "payload/amfi.dylib",
-                 "Media/Recordings/.haxx/var/unthreadedjb/amfi.dylib",
-                 //"Media/Recordings/.haxx/var/evasi0n/amfi.dylib",
-                 0100755, 0, 0, 4) != 0) {
-                ERROR("Could not add amfi\n");
-            }
+
             if (backup_add_file_from_path(backup, "MediaDomain", "payload/Cydia.tar",
-                  "Media/Recordings/.haxx/var/unthreadedjb/Cydia.tar", 0100644,
-                  //"Media/evasi0n-install/Cydia.tar", 0100644,
-                  0, 0, 4) != 0) {
+                 "Media/Recordings/.haxx/var/mobile/Media/evasi0n-install/Cydia.tar",
+                 0100644, 501, 501, 4) != 0) {
                 ERROR("Could not add Cydia\n");
             }
 
-            if (backup_add_file_from_path(backup, "MediaDomain", "payload/substrate4g1lbert.deb",
-                 "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/substrate4g1lbert.deb",
-                 0100755, 0, 0, 4) != 0) {
-                ERROR("Could not add substrate\n");
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/evasi0n/packagelist.tar",
+                 "Media/Recordings/.haxx/var/mobile/Media/evasi0n-install/packagelist.tar",
+                 0100644, 501, 501, 4) != 0) {
+                ERROR("Could not add packagelist\n");
             }
-            if (backup_add_file_from_path(backup, "MediaDomain", "payload/safemode4g1lbert.deb",
-                 "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/safemode4g1lbert.deb",
-                 0100755, 0, 0, 4) != 0) {
-                ERROR("Could not add safemode\n");
+
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/evasi0n/extras.tar",
+                 "Media/Recordings/.haxx/var/mobile/Media/evasi0n-install/extras.tar",
+                 0100644, 501, 501, 4) != 0) {
+                ERROR("Could not add extras\n");
             }
+
+            if (backup_add_file_from_path(backup, "MediaDomain", jb_path,
+                 "Media/Recordings/.haxx/var/evasi0n/evasi0n",
+                 0100755, 0, 0, 4) != 0) {
+                ERROR("Could not add jb\n");
+            }
+
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/evasi0n/amfi.dylib",
+                 "Media/Recordings/.haxx/var/evasi0n/amfi.dylib",
+                 0100755, 0, 0, 4) != 0) {
+                ERROR("Could not add amfi\n");
+            }
+
+            if (backup_add_file_from_data(backup, "MediaDomain", uuid, strlen(uuid),
+                "Media/Recordings/.haxx/var/evasi0n/udid",
+                 0100644, 0, 0, 4) != 0) {
+                ERROR("Could not add udid\n");
+            }
+
+        } else {
+            // ios 5.0-5.1.1 pris0nbarake
+            if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/var/unthreadedjb", 0755, 0, 0, 4) != 0) {
+                ERROR("Could not make var/unthreadedjb folder\n");
+            }
+
+            snprintf(jb_path, 128, "payload/%s_%s/jb", build, product);
+
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/launchd.conf",
+                 "Media/Recordings/.haxx/var/unthreadedjb/launchd.conf",
+                 0100644, 0, 0, 4) != 0) {
+                ERROR("Could not add launchd.conf\n");
+            }
+
+            if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/private/etc/launchd.conf",
+                 "/private/var/unthreadedjb/launchd.conf", 501, 501, 4) != 0) {
+                ERROR("Failed to symlink launchd.conf!\n");
+            }
+
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/Cydia.tar",
+                 "Media/Recordings/.haxx/var/unthreadedjb/Cydia.tar",
+                 0100644, 501, 501, 4) != 0) {
+                ERROR("Could not add Cydia\n");
+            }
+
+            if (backup_add_file_from_path(backup, "MediaDomain", jb_path,
+                 "Media/Recordings/.haxx/var/unthreadedjb/jb",
+                 0100755, 0, 0, 4) != 0) {
+                ERROR("Could not add jb\n");
+            }
+
+            if (backup_add_file_from_path(backup, "MediaDomain",
+                "payload/amfi.dylib", "Media/Recordings/.haxx/var/unthreadedjb/amfi.dylib",
+                 0100755, 0, 0, 4) != 0) {
+                ERROR("Could not add amfi\n");
+            }
+            /*
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/g1lbertJB.list",
+                 "Media/Recordings/.haxx/var/unthreadedjb/g1lbertJB.list",
+                 0100644, 0, 0, 4) != 0) {
+                ERROR("Could not add g1lbertJB.list\n");
+            }
+
+            if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/private/etc/apt", 0755, 0, 0, 4) != 0) {
+                ERROR("Could not make apt folder\n");
+            }
+
+            if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/private/etc/apt/sources.list.d", 0755, 0, 0, 4) != 0) {
+                ERROR("Could not make sources.list.d folder\n");
+            }
+
+            if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/private/etc/apt/sources.list.d/g1lbertJB.list",
+                 "/private/var/unthreadedjb/g1lbertJB.list", 0, 0, 4) != 0) {
+                ERROR("Failed to symlink g1lbertJB.list!\n");
+            }
+            */
             if (strcmp(product, "N94AP") == 0 || strcmp(build, "9A334") == 0) {
                 snprintf(untether_deb_path, 128, "payload/corona.deb");
                 if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
@@ -1176,6 +1591,7 @@ int jailbreak_device(const char *uuid)
                     ERROR("Could not add corona untether\n");
                 }
             }
+
             if (strcmp(build, "9A405") == 0 || strcmp(build, "9A406") == 0) {
                 snprintf(untether_deb_path, 128, "payload/corona.deb");
                 if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
@@ -1184,6 +1600,7 @@ int jailbreak_device(const char *uuid)
                     ERROR("Could not add corona untether\n");
                 }
             }
+
             if (strcmp(build, "9B206") == 0 || strcmp(build, "9B208") == 0) {
                 snprintf(untether_deb_path, 128, "payload/rockyracoon.deb");
                 if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
@@ -1193,43 +1610,51 @@ int jailbreak_device(const char *uuid)
                 }
             }
         }
+        backup_write_mbdb(backup);
         backup_free(backup);
     }
 
     DEBUG("Stage 3: Restoring backup\n");
-    idevicebackup2(6, rargv);
+    if (build[0] == '1') {
+        idevicebackup2(5, rargv2);
+    } else {
+        idevicebackup2(6, rargv);
 
-    afc_client_free(afc);
-    afc = NULL;
+        afc_client_free(afc);
+        afc = NULL;
 
-    DEBUG("Waiting for reboot, not done yet, don't unplug your device yet!\n");
-    // wait for disconnect
-    while (connected) {
-        sleep(2);
-    }
-    DEBUG("Device %s disconnected\n", uuid);
+        DEBUG("Waiting for reboot, not done yet, don't unplug your device yet!\n");
+        // wait for disconnect
+        while (connected) {
+            sleep(2);
+        }
+        DEBUG("Device %s disconnected\n", uuid);
 
-    // wait for device to connect
-    while (!connected) {
-        sleep(2);
+        // wait for device to connect
+        while (!connected) {
+            sleep(2);
+        }
+        DEBUG("Device %s detected. Connecting...\n", uuid);
+        sleep(10);
+        device = device_create(uuid);
+        if (!device) {
+            ERROR("ERROR: Could not connect to device. Aborting.\n");
+            // we can't recover since the device connection failed...
+            return -1;
+        }
+
+        // give it a bit to run
+        DEBUG("Don't unplug your device yet!\n");
+        sleep(30);
     }
-    DEBUG("Device %s detected. Connecting...\n", uuid);
-    sleep(10);
-    device = device_create(uuid);
-    if (!device) {
-        ERROR("ERROR: Could not connect to device. Aborting.\n");
-        // we can't recover since the device connection failed...
-        return -1;
-    }
-    // give it a bit to run
-    DEBUG("Don't unplug your device yet!\n");
-    sleep(30);
+
+    trash_var_backup(backup_dir, uuid);
 
     DEBUG("Installed jailbreak successfully. Rebooting the device...\n");
 
     // move back any remaining dirs via AFC
  fix:
-    DEBUG("Moving files...\n", 80);
+    DEBUG("Moving files...\n");
     if (!afc) {
         lockdown = lockdown_open(device);
         port = 0;

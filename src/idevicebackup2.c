@@ -1575,9 +1575,8 @@ int idevicebackup2(int argc, char *argv[])
             return -1;
         }
     } else {
-        /* backup directory must contain an Info.plist */
-        info_path =
-            build_path(backup_directory, source_udid, "Info.plist", NULL);
+        /* backup directory must contain an Info.plist
+        info_path = build_path(backup_directory, source_udid, "Info.plist", NULL);
         if (cmd == CMD_RESTORE) {
             if (stat(info_path, &st) != 0) {
                 free(info_path);
@@ -1609,6 +1608,7 @@ int idevicebackup2(int argc, char *argv[])
             plist_free(manifest_plist);
             free(manifest_path);
         }
+        */
         PRINT_VERBOSE(1, "Backup directory is \"%s\"\n", backup_directory);
     }
 
@@ -1720,8 +1720,8 @@ int idevicebackup2(int argc, char *argv[])
             }
         } else {
             if (cmd == CMD_RESTORE) {
-                printf("Aborting restore. Info.plist is missing.\n");
-                cmd = CMD_LEAVE;
+                //printf("Aborting restore. Info.plist is missing.\n");
+                //cmd = CMD_LEAVE;
             } else {
                 is_full_backup = 1;
             }
