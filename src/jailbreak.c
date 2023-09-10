@@ -966,86 +966,95 @@ int jailbreak_device(const char *uuid)
     };
 
     char HKPTMP[512];
-    strcpy(HKPTMP, backup_dir);
-    strcat(HKPTMP, "/");
-    strcat(HKPTMP, uuid);
-    mkdir(HKPTMP, 0755);
-
     char dstf[512];
 
-    // create Manifest.plist
-    strcpy(dstf, HKPTMP);
-    strcat(dstf, "/Manifest.plist");
+    if (build[0] == '1') {
+        // ios 6.0-6.1.2 stage 1 setup
+        DEBUG("Stage 1: Preparing files\n");
 
-    plist_t mnf = plist_new_dict();
-    plist_dict_set_item(mnf, "Applications", plist_new_array());
-    plist_dict_set_item(mnf, "BackupKeyBag", plist_new_data((char*)backup_kbag, sizeof(backup_kbag)));
-    plist_dict_set_item(mnf, "Date", plist_new_date(time(NULL), 0));
-    plist_dict_set_item(mnf, "IsEncrypted", plist_new_bool(0));
-    plist_t lckd = plist_new_dict();
-    plist_dict_set_item(lckd, "BuildVersion", pl_build);
-    plist_dict_set_item(lckd, "DeviceName", pl_devname);
-    plist_dict_set_item(lckd, "ProductType", pl_ptype);
-    plist_dict_set_item(lckd, "ProductVersion", pl_pver);
-    plist_dict_set_item(lckd, "SerialNumber", pl_snum);
-    plist_dict_set_item(lckd, "UniqueDeviceID", plist_new_string(uuid));
+        strcpy(HKPTMP, backup_dir);
+        strcat(HKPTMP, "/");
+        strcat(HKPTMP, uuid);
+        mkdir(HKPTMP, 0755);
 
-    plist_t ccdict = plist_new_dict();
-    plist_dict_set_item(ccdict, "ShouldSubmit", plist_new_bool(0));
-    plist_dict_set_item(lckd, "com.apple.MobileDeviceCrashCopy", ccdict);
+        // create Manifest.plist
+        strcpy(dstf, HKPTMP);
+        strcat(dstf, "/Manifest.plist");
 
-    plist_t ibdict = plist_new_dict();
-    char hostname[256];
-    if (gethostname(hostname, 256) != 0) {
-        strcpy(hostname, "localhost");
-    }
-    plist_dict_set_item(ibdict, "LastBackupComputerName", plist_new_string(hostname));
-    plist_dict_set_item(ibdict, "LastBackupComputerType", plist_new_string("Mac"));
-    plist_dict_set_item(lckd, "com.apple.iTunes.backup", ibdict);
+        plist_t mnf = plist_new_dict();
+        plist_dict_set_item(mnf, "Applications", plist_new_array());
+        plist_dict_set_item(mnf, "BackupKeyBag", plist_new_data((char*)backup_kbag, sizeof(backup_kbag)));
+        plist_dict_set_item(mnf, "Date", plist_new_date(time(NULL), 0));
+        plist_dict_set_item(mnf, "IsEncrypted", plist_new_bool(0));
+        plist_t lckd = plist_new_dict();
+        plist_dict_set_item(lckd, "BuildVersion", pl_build);
+        plist_dict_set_item(lckd, "DeviceName", pl_devname);
+        plist_dict_set_item(lckd, "ProductType", pl_ptype);
+        plist_dict_set_item(lckd, "ProductVersion", pl_pver);
+        plist_dict_set_item(lckd, "SerialNumber", pl_snum);
+        plist_dict_set_item(lckd, "UniqueDeviceID", plist_new_string(uuid));
 
-    plist_dict_set_item(mnf, "Lockdown", lckd);
-    plist_dict_set_item(mnf, "SystemDomainsVersion", plist_new_string("12.0"));
-    plist_dict_set_item(mnf, "Version", plist_new_string("9.0"));
-    plist_dict_set_item(mnf, "WasPasscodeSet", plist_new_bool(0));
+        plist_t ccdict = plist_new_dict();
+        plist_dict_set_item(ccdict, "ShouldSubmit", plist_new_bool(0));
+        plist_dict_set_item(lckd, "com.apple.MobileDeviceCrashCopy", ccdict);
 
-    DEBUG("Writing %s\n", dstf);
-    char *mnf_buf = NULL;
-    uint32_t mnf_len;
-    plist_to_bin(mnf, &mnf_buf, &mnf_len);
-    if (file_write(dstf, mnf_buf, mnf_len) < 0) {
-        ERROR("Failed to write plist\n");
-    }
-    plist_free(mnf);
+        plist_t ibdict = plist_new_dict();
+        char hostname[256];
+        if (gethostname(hostname, 256) != 0) {
+            strcpy(hostname, "localhost");
+        }
+        plist_dict_set_item(ibdict, "LastBackupComputerName", plist_new_string(hostname));
+        plist_dict_set_item(ibdict, "LastBackupComputerType", plist_new_string("Mac"));
+        plist_dict_set_item(lckd, "com.apple.iTunes.backup", ibdict);
 
-    // create Status.plist
-    strcpy(dstf, HKPTMP);
-    strcat(dstf, "/Status.plist");
+        plist_dict_set_item(mnf, "Lockdown", lckd);
+        plist_dict_set_item(mnf, "SystemDomainsVersion", plist_new_string("12.0"));
+        plist_dict_set_item(mnf, "Version", plist_new_string("9.0"));
+        plist_dict_set_item(mnf, "WasPasscodeSet", plist_new_bool(0));
 
-    plist_t stt = plist_new_dict();
-    plist_dict_set_item(stt, "BackupState", plist_new_string("new"));
-    plist_dict_set_item(stt, "Date", plist_new_date(time(NULL), 0));
-    plist_dict_set_item(stt, "IsFullBackup", plist_new_bool(1));
-    plist_dict_set_item(stt, "SnapshotState", plist_new_string("finished"));
-    char* backup_uuid = gen_uuid();
-    plist_dict_set_item(stt, "UUID", plist_new_string(backup_uuid));
-    free(backup_uuid);
-    plist_dict_set_item(stt, "Version", plist_new_string("2.4"));
+        DEBUG("Writing %s\n", dstf);
+        char *mnf_buf = NULL;
+        uint32_t mnf_len;
+        plist_to_bin(mnf, &mnf_buf, &mnf_len);
+        if (file_write(dstf, mnf_buf, mnf_len) < 0) {
+            ERROR("Failed to write plist\n");
+        }
+        plist_free(mnf);
 
-    DEBUG("Writing %s\n", dstf);
-    char *stt_buf = NULL;
-    uint32_t stt_len;
-    plist_to_bin(stt, &stt_buf, &stt_len);
-    if (file_write(dstf, stt_buf, stt_len) < 0) {
-        ERROR("Failed to write plist\n");
-    }
-    plist_free(stt);
+        // create Status.plist
+        strcpy(dstf, HKPTMP);
+        strcat(dstf, "/Status.plist");
 
-    DEBUG("Stage 1: Creating backup\n");
-    strcpy(dstf, HKPTMP);
-    strcat(dstf, "/Manifest.mbdb");
-    DEBUG("Writing %s\n", dstf);
-    if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
-        ERROR("Could not write file '%s'!\n", dstf);
+        plist_t stt = plist_new_dict();
+        plist_dict_set_item(stt, "BackupState", plist_new_string("new"));
+        plist_dict_set_item(stt, "Date", plist_new_date(time(NULL), 0));
+        plist_dict_set_item(stt, "IsFullBackup", plist_new_bool(1));
+        plist_dict_set_item(stt, "SnapshotState", plist_new_string("finished"));
+        char* backup_uuid = gen_uuid();
+        plist_dict_set_item(stt, "UUID", plist_new_string(backup_uuid));
+        free(backup_uuid);
+        plist_dict_set_item(stt, "Version", plist_new_string("2.4"));
+
+        DEBUG("Writing %s\n", dstf);
+        char *stt_buf = NULL;
+        uint32_t stt_len;
+        plist_to_bin(stt, &stt_buf, &stt_len);
+        if (file_write(dstf, stt_buf, stt_len) < 0) {
+            ERROR("Failed to write plist\n");
+        }
+        plist_free(stt);
+
+        DEBUG("Stage 1: Creating backup\n");
+        strcpy(dstf, HKPTMP);
+        strcat(dstf, "/Manifest.mbdb");
+        DEBUG("Writing %s\n", dstf);
+        if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
+            ERROR("Could not write file '%s'!\n", dstf);
+        }
+    } else {
+        // ios 5.0-5.1.1 stage 1 setup
+        DEBUG("Stage 1: Creating backup\n");
+        idevicebackup2(3, bargv);
     }
 
     backup_t *backup = backup_open(backup_dir, uuid);
@@ -1202,15 +1211,45 @@ int jailbreak_device(const char *uuid)
     lockdown_free(lockdown);
     lockdown = NULL;
 
-    trash_var_backup(backup_dir, uuid);
+    if (build[0] == '1') {
+        // ios 6.0-6.1.2 stage 2 (1/3) setup
+        trash_var_backup(backup_dir, uuid);
 
-    // Change to /var/db/timezone thingy
-    DEBUG("Stage 2: Creating backup 1\n");
-    strcpy(dstf, HKPTMP);
-    strcat(dstf, "/Manifest.mbdb");
+        // Change to /var/db/timezone thingy
+        DEBUG("Stage 2: Creating backup (1/3)\n");
+        strcpy(dstf, HKPTMP);
+        strcat(dstf, "/Manifest.mbdb");
 
-    if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
-        ERROR("Could not write file '%s'!\n", dstf);
+        if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
+            ERROR("Could not write file '%s'!\n", dstf);
+        }
+
+    } else {
+        // ios 5.0-5.1.1 stage 2 (1/2) setup
+        DEBUG("Stage 1: Deleting files\n");
+        if (!afc) {
+            lockdown = lockdown_open(device);
+            port = 0;
+            if (lockdown_start_service(lockdown, "com.apple.afc", &port) != 0) {
+                WARN("Could not start AFC service. Aborting.\n");
+                lockdown_free(lockdown);
+                goto leave;
+            }
+            lockdown_free(lockdown);
+
+            desc.port = port;
+            afc_client_new(device->client, &desc, &afc);
+            if (!afc) {
+                WARN("Could not connect to AFC. Aborting.\n");
+                goto leave;
+            }
+        }
+        rmdir_recursive_afc(afc, "/Recordings", 1);
+        rmdir_recursive(backup_dir);
+
+        DEBUG("Stage 2: Creating backup (1/2)\n");
+        mkdir(backup_dir, 0755);
+        idevicebackup2(3, bargv);
     }
 
     backup = backup_open(backup_dir, uuid);
@@ -1250,7 +1289,7 @@ int jailbreak_device(const char *uuid)
     DEBUG("Stage 2: Restoring backup 1\n");
     idevicebackup2(5, rargv2);
 
-    DEBUG("Stage 2: Crash lockdownd\n");
+    DEBUG("Stage 2: Crash lockdownd 1\n");
     stroke_lockdownd(device);
 
     if (!afc) {
@@ -1271,67 +1310,110 @@ int jailbreak_device(const char *uuid)
         }
     }
 
-    DEBUG("Stage 2: Modifying backup 2\n");
+    backup_file_t* bf = NULL;
     int res = 0;
-    backup_file_t* bf = backup_get_file(backup, "MediaDomain", "Media/Recordings/.haxx/timezone");
-        if (bf) {
-                backup_file_set_target(bf, "/var/tmp/launchd/sock");
-                backup_file_set_mode(bf, 0120644);
-                backup_file_set_uid(bf, 0);
-                backup_file_set_gid(bf, 0);
-                unsigned int tm = (unsigned int)(time(NULL));
-                backup_file_set_time1(bf, tm);
-                backup_file_set_time2(bf, tm);
-                backup_file_set_time3(bf, tm);
-                backup_file_set_flag(bf, 0);
 
-                if (backup_update_file(backup, bf) < 0) {
-                        res = -1;
-                }
-                backup_file_free(bf);
+    if (build[0] == '1') {
+        // ios 6.0-6.1.2 stage 2 setup (2/3)
+        DEBUG("Stage 2: Modifying backup (2/3)\n");
+        bf = backup_get_file(backup, "MediaDomain", "Media/Recordings/.haxx/timezone");
+            if (bf) {
+                    backup_file_set_target(bf, "/var/tmp/launchd/sock");
+                    backup_file_set_mode(bf, 0120644);
+                    backup_file_set_uid(bf, 0);
+                    backup_file_set_gid(bf, 0);
+                    unsigned int tm = (unsigned int)(time(NULL));
+                    backup_file_set_time1(bf, tm);
+                    backup_file_set_time2(bf, tm);
+                    backup_file_set_time3(bf, tm);
+                    backup_file_set_flag(bf, 0);
+
+                    if (backup_update_file(backup, bf) < 0) {
+                            res = -1;
+                    }
+                    backup_file_free(bf);
+            }
+        if (res < 0) {
+            ERROR("Could not add file to backup\n");
         }
-    if (res < 0) {
-        ERROR("Could not add file to backup\n");
+        backup_write_mbdb(backup);
+
+    } else {
+        // ios 5.0-5.1.1 stage 2 setup (2/2)
+        backup_free(backup);
+
+        DEBUG("Stage 2: Deleting files (1/2)\n");
+        rmdir_recursive_afc(afc, "/Recordings", 1);
+        rmdir_recursive(backup_dir);
+
+        DEBUG("Stage 2: Creating backup (2/2)\n");
+        mkdir(backup_dir, 0755);
+        idevicebackup2(3, bargv);
+
+        backup = backup_open(backup_dir, uuid);
+        if (!backup) {
+            fprintf(stderr, "ERROR: failed to open backup\n");
+            return -1;
+        }
+
+        // Do it again
+        DEBUG("Stage 2: Modifying backup 2\n");
+        {
+            if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
+                ERROR("Could not make folder\n");
+            }
+
+            if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx", "/var/db", 501, 501, 4) != 0) {
+                ERROR("Failed to symlink /var/db!\n");
+            }
+
+            if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/timezone", "/var/tmp/launchd/sock", 501, 501, 4) != 0) {
+                ERROR("Failed to symlink /var/tmp/launchd/sock!\n");
+            }
+            backup_free(backup);
+        }
     }
-    backup_write_mbdb(backup);
 
     DEBUG("Stage 2: Restoring backup 2\n");
     idevicebackup2(5, rargv2);
 
-    DEBUG("Stage 2: Crash lockdownd\n");
+    DEBUG("Stage 2: Crash lockdownd 2\n");
     stroke_lockdownd(device);
 
-    // remove timezone symlink
-    res = -1;
-    DEBUG("Stage 2: Modifying backup 3\n");
-    bf = backup_get_file(backup, "MediaDomain", "Media/Recordings/.haxx/timezone");
-        if (bf) {
-                backup_file_set_target_with_length(bf, "\0", 1);
-                backup_file_set_mode(bf, 0120644);
-                backup_file_set_uid(bf, 0);
-                backup_file_set_gid(bf, 0);
-                unsigned int tm = (unsigned int)(time(NULL));
-                backup_file_set_time1(bf, tm);
-                backup_file_set_time2(bf, tm);
-                backup_file_set_time3(bf, tm);
-                backup_file_set_flag(bf, 0);
+    if (build[0] == '1') {
+        // ios 6.0-6.1.2 stage 2 setup (3/3)
+        // remove timezone symlink
+        res = -1;
+        DEBUG("Stage 2: Modifying backup (3/3)\n");
+        bf = backup_get_file(backup, "MediaDomain", "Media/Recordings/.haxx/timezone");
+            if (bf) {
+                    backup_file_set_target_with_length(bf, "\0", 1);
+                    backup_file_set_mode(bf, 0120644);
+                    backup_file_set_uid(bf, 0);
+                    backup_file_set_gid(bf, 0);
+                    unsigned int tm = (unsigned int)(time(NULL));
+                    backup_file_set_time1(bf, tm);
+                    backup_file_set_time2(bf, tm);
+                    backup_file_set_time3(bf, tm);
+                    backup_file_set_flag(bf, 0);
 
-                if (backup_update_file(backup, bf) < 0) {
-            res = -1;
-        } else {
-            res = 0;
+                    if (backup_update_file(backup, bf) < 0) {
+                res = -1;
+            } else {
+                res = 0;
+            }
+                    backup_file_free(bf);
+            }
+        if (res < 0) {
+            ERROR("Couldn't add file to backup!\n");
         }
-                backup_file_free(bf);
-        }
-    if (res < 0) {
-        ERROR("Couldn't add file to backup!\n");
+
+        backup_write_mbdb(backup);
+        backup_free(backup);
+
+        DEBUG("Stage 2: Restoring backup 3\n");
+        idevicebackup2(5, rargv2);
     }
-
-    backup_write_mbdb(backup);
-    backup_free(backup);
-
-    DEBUG("Stage 2: Restoring backup 3\n");
-    idevicebackup2(5, rargv2);
 
     if (!afc) {
         lockdown = lockdown_open(device);
@@ -1368,34 +1450,35 @@ int jailbreak_device(const char *uuid)
         sleep(2);
     }
 
-    DEBUG("Stage 3: Creating backup 1\n");
-    strcpy(dstf, HKPTMP);
-    strcat(dstf, "/Manifest.mbdb");
+    if (build[0] == '1') {
+        // ios 6.0-6.1.2 stage 3 setup (1/2)
+        DEBUG("Stage 3: Creating backup 1\n");
+        strcpy(dstf, HKPTMP);
+        strcat(dstf, "/Manifest.mbdb");
 
-    if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
-        ERROR("Could not write file '%s'!\n", dstf);
-    }
-
-    backup = backup_open(backup_dir, uuid);
-    if (!backup) {
-        ERROR("failed to open backup\n");
-    }
-
-    DEBUG("Stage 3: Modifying backup 1\n");
-    {
-        if (backup_mkdir(backup, "MediaDomain", "Media", 0755, 501, 501, 4) != 0) {
-            ERROR("Could not make folder\n");
+        if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
+            ERROR("Could not write file '%s'!\n", dstf);
         }
 
-        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
-            ERROR("Could not make folder\n");
+        backup = backup_open(backup_dir, uuid);
+        if (!backup) {
+            ERROR("failed to open backup\n");
         }
 
-        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx", "/var", 501, 501, 4) != 0) {
-            ERROR("Failed to symlink root!\n");
-        }
+        DEBUG("Stage 3: Modifying backup 1\n");
+        {
+            if (backup_mkdir(backup, "MediaDomain", "Media", 0755, 501, 501, 4) != 0) {
+                ERROR("Could not make folder\n");
+            }
 
-        if (build[0] == '1') {
+            if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
+                ERROR("Could not make folder\n");
+            }
+
+            if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx", "/var", 501, 501, 4) != 0) {
+                ERROR("Failed to symlink root!\n");
+            }
+
             if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/mobile/Media", 0755, 501, 501, 4) != 0) {
                 ERROR("Could not make evasi0n-install folder\n");
             }
@@ -1403,34 +1486,46 @@ int jailbreak_device(const char *uuid)
             if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/mobile/Media/evasi0n-install", 0755, 501, 501, 4) != 0) {
                 ERROR("Could not make evasi0n-install folder\n");
             }
+
+            // restore /var/db/timezone folder
+            if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/db/timezone", 0777, 0, 0, 4) != 0) {
+                ERROR("Couldn't add dir to backup\n");
+            }
+
+            // - Replace /private/var/mobile/DemoApp.app/DemoApp with symlink to /
+            if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/mobile/DemoApp.app/DemoApp", "/", 0, 0, 4) != 0) {
+                ERROR("Error: Couldn't add file to backup!\n");
+            }
+
+            backup_write_mbdb(backup);
+            backup_free(backup);
         }
 
-        // restore /var/db/timezone folder
-        if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/db/timezone", 0777, 0, 0, 4) != 0) {
-            ERROR("Couldn't add dir to backup\n");
-        }
-
-        // - Replace /private/var/mobile/DemoApp.app/DemoApp with symlink to /
-        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/mobile/DemoApp.app/DemoApp", "/", 0, 0, 4) != 0) {
-            ERROR("Error: Couldn't add file to backup!\n");
-        }
-
-        backup_write_mbdb(backup);
-        backup_free(backup);
+        DEBUG("Stage 3: Restoring backup 1\n");
+        idevicebackup2(5, rargv2);
     }
-
-    DEBUG("Stage 3: Restoring backup 1\n");
-    idevicebackup2(5, rargv2);
 
     DEBUG("Stage 3: Giving it 10 seconds for root filesystem to remount\n");
     sleep(10);
 
-    DEBUG("Stage 3: Creating backup 2\n");
-    strcpy(dstf, HKPTMP);
-    strcat(dstf, "/Manifest.mbdb");
+    if (build[0] == '1') {
+        // ios 6.0-6.1.2 stage 3 setup (2/2)
+        DEBUG("Stage 3: Creating backup 2\n");
+        strcpy(dstf, HKPTMP);
+        strcat(dstf, "/Manifest.mbdb");
 
-    if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
-        ERROR("Could not write file '%s'!\n", dstf);
+        if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
+            ERROR("Could not write file '%s'!\n", dstf);
+        }
+    } else {
+        // ios 5.0-5.1.1 stage 3 setup
+        DEBUG("Stage 2: Deleting files\n");
+        rmdir_recursive_afc(afc, "/Recordings", 1);
+        rmdir_recursive(backup_dir);
+
+        DEBUG("Stage 3: Creating backup\n");
+        mkdir(backup_dir, 0755);
+        idevicebackup2(3, bargv);
     }
 
     backup = backup_open(backup_dir, uuid);
@@ -1439,7 +1534,7 @@ int jailbreak_device(const char *uuid)
     }
 
     // Do it again
-    DEBUG("Stage 3: Modifying backup 2\n");
+    DEBUG("Stage 3: Modifying backup\n");
     {
         if (backup_mkdir(backup, "MediaDomain", "Media", 0755, 501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
@@ -1616,8 +1711,10 @@ int jailbreak_device(const char *uuid)
 
     DEBUG("Stage 3: Restoring backup\n");
     if (build[0] == '1') {
+        // ios 6.0-6.1.2 stage 3 restore
         idevicebackup2(5, rargv2);
     } else {
+        // ios 5.0-5.1.1 stage 3 restore
         idevicebackup2(6, rargv);
 
         afc_client_free(afc);
@@ -1648,7 +1745,9 @@ int jailbreak_device(const char *uuid)
         sleep(30);
     }
 
-    trash_var_backup(backup_dir, uuid);
+    if (build[0] == '1') {
+        trash_var_backup(backup_dir, uuid);
+    }
 
     DEBUG("Installed jailbreak successfully. Rebooting the device...\n");
 
