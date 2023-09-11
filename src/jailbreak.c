@@ -683,10 +683,10 @@ int jailbreak_device(const char *uuid)
         ERROR("Missing device UDID\n");
     }
 
-    strcpy(backup_dir, "/tmp/pris0nbarake");
+    strcpy(backup_dir, "/tmp/g1lbertJB");
 
     DEBUG("Connecting to device...\n");
-    int retries = 10;
+    int retries = 20;
     int i = 0;
     while (!connected && (i++ < retries)) {
         sleep(1);
@@ -880,10 +880,10 @@ int jailbreak_device(const char *uuid)
 
     if (count) {
         DEBUG("Decompressing dump.cpio.gz...\n");
-        system("gzip -d /tmp/pris0nbarake/dump.cpio.gz");
+        system("gzip -d /tmp/g1lbertJB/dump.cpio.gz");
         DEBUG("Extracting dump.cpio...\n");
         rmdir_recursive("var/mobile/Library/Caches");
-        system("cpio -idv < /tmp/pris0nbarake/dump.cpio");
+        system("cpio -idv < /tmp/g1lbertJB/dump.cpio");
         DEBUG("Grabbing com.apple.mobile.installation.plist...\n");
         FILE *newf = fopen("var/mobile/Library/Caches/com.apple.mobile.installation.plist", "rb");
         assert(newf != NULL);
@@ -1177,7 +1177,7 @@ int jailbreak_device(const char *uuid)
         return -1;
     }
 
-    retries = 10;
+    retries = 20;
     int done = 0;
     sbservices_client_t sbsc = NULL;
     plist_t state = NULL;
@@ -1337,6 +1337,7 @@ int jailbreak_device(const char *uuid)
             ERROR("Could not add file to backup\n");
         }
         backup_write_mbdb(backup);
+        DEBUG("Stage 2: Restoring backup (2/3)\n");
 
     } else {
         // ios 5.0-5.1.1 stage 2 setup (2/2)
@@ -1357,7 +1358,7 @@ int jailbreak_device(const char *uuid)
         }
 
         // Do it again
-        DEBUG("Stage 2: Modifying backup 2\n");
+        DEBUG("Stage 2: Modifying backup (2/2)\n");
         {
             if (backup_mkdir(backup, "MediaDomain", "Media/Recordings", 0755, 501, 501, 4) != 0) {
                 ERROR("Could not make folder\n");
@@ -1372,9 +1373,9 @@ int jailbreak_device(const char *uuid)
             }
             backup_free(backup);
         }
+        DEBUG("Stage 2: Restoring backup (2/2)\n");
     }
 
-    DEBUG("Stage 2: Restoring backup 2\n");
     idevicebackup2(5, rargv2);
 
     DEBUG("Stage 2: Crash lockdownd 2\n");
@@ -1411,7 +1412,7 @@ int jailbreak_device(const char *uuid)
         backup_write_mbdb(backup);
         backup_free(backup);
 
-        DEBUG("Stage 2: Restoring backup 3\n");
+        DEBUG("Stage 2: Restoring backup (3/3)\n");
         idevicebackup2(5, rargv2);
     }
 
@@ -1437,8 +1438,7 @@ int jailbreak_device(const char *uuid)
     afc_remove_path(afc, "/mount.stdout");
 
     // Now, the lockdown socket is 777
-    WARN("Please run the #Unthread application to remount the root filesystem as read/write.\n");
-    WARN("Yes, the app is supposed to crash. Don't worry about it.\n");
+    WARN("To continue, please run the 'g1lbertJB' icon to remount the root filesystem as read/write.\n");
     done = 0;
     while (done != 1) {
         char** fi = NULL;
@@ -1452,7 +1452,7 @@ int jailbreak_device(const char *uuid)
 
     if (build[0] == '1') {
         // ios 6.0-6.1.2 stage 3 setup (1/2)
-        DEBUG("Stage 3: Creating backup 1\n");
+        DEBUG("Stage 3: Creating backup (1/2)\n");
         strcpy(dstf, HKPTMP);
         strcat(dstf, "/Manifest.mbdb");
 
@@ -1465,7 +1465,7 @@ int jailbreak_device(const char *uuid)
             ERROR("failed to open backup\n");
         }
 
-        DEBUG("Stage 3: Modifying backup 1\n");
+        DEBUG("Stage 3: Modifying backup (1/2)\n");
         {
             if (backup_mkdir(backup, "MediaDomain", "Media", 0755, 501, 501, 4) != 0) {
                 ERROR("Could not make folder\n");
@@ -1501,8 +1501,13 @@ int jailbreak_device(const char *uuid)
             backup_free(backup);
         }
 
-        DEBUG("Stage 3: Restoring backup 1\n");
+        DEBUG("Stage 3: Restoring backup (1/2)\n");
         idevicebackup2(5, rargv2);
+
+    } else {
+        DEBUG("Stage 2: Deleting files (2/2)\n");
+        rmdir_recursive_afc(afc, "/Recordings", 1);
+        rmdir_recursive(backup_dir);
     }
 
     DEBUG("Stage 3: Giving it 10 seconds for root filesystem to remount\n");
@@ -1510,22 +1515,23 @@ int jailbreak_device(const char *uuid)
 
     if (build[0] == '1') {
         // ios 6.0-6.1.2 stage 3 setup (2/2)
-        DEBUG("Stage 3: Creating backup 2\n");
+        DEBUG("Stage 3: Creating backup (2/2)\n");
         strcpy(dstf, HKPTMP);
         strcat(dstf, "/Manifest.mbdb");
 
         if (file_write(dstf, (unsigned char*)"mbdb\5\0", 6) < 0) {
             ERROR("Could not write file '%s'!\n", dstf);
         }
-    } else {
-        // ios 5.0-5.1.1 stage 3 setup
-        DEBUG("Stage 2: Deleting files\n");
-        rmdir_recursive_afc(afc, "/Recordings", 1);
-        rmdir_recursive(backup_dir);
 
-        DEBUG("Stage 3: Creating backup\n");
+        DEBUG("Stage 3: Modifying backup (2/2)\n");
+
+    } else {
+        // ios 5.0-5.1.1 stage 3 setup (1/2)
+        DEBUG("Stage 3: Creating backup (1/2)\n");
         mkdir(backup_dir, 0755);
         idevicebackup2(3, bargv);
+
+        DEBUG("Stage 3: Modifying backup (1/2)\n");
     }
 
     backup = backup_open(backup_dir, uuid);
@@ -1534,7 +1540,6 @@ int jailbreak_device(const char *uuid)
     }
 
     // Do it again
-    DEBUG("Stage 3: Modifying backup\n");
     {
         if (backup_mkdir(backup, "MediaDomain", "Media", 0755, 501, 501, 4) != 0) {
             ERROR("Could not make folder\n");
@@ -1658,50 +1663,54 @@ int jailbreak_device(const char *uuid)
                  0100755, 0, 0, 4) != 0) {
                 ERROR("Could not add amfi\n");
             }
-            /*
+
             if (backup_add_file_from_path(backup, "MediaDomain", "payload/g1lbertJB.list",
                  "Media/Recordings/.haxx/var/unthreadedjb/g1lbertJB.list",
                  0100644, 0, 0, 4) != 0) {
                 ERROR("Could not add g1lbertJB.list\n");
             }
 
-            if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/private/etc/apt", 0755, 0, 0, 4) != 0) {
-                ERROR("Could not make apt folder\n");
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/substrate4g1lbert.deb",
+                 "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/substrate4g1lbert.deb",
+                 0100644, 0, 0, 4) != 0) {
+                ERROR("Could not add substrate\n");
             }
 
-            if (backup_mkdir(backup, "MediaDomain", "Media/Recordings/.haxx/private/etc/apt/sources.list.d", 0755, 0, 0, 4) != 0) {
-                ERROR("Could not make sources.list.d folder\n");
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/safemode4g1lbert.deb",
+                 "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/safemode4g1lbert.deb",
+                 0100644, 0, 0, 4) != 0) {
+                ERROR("Could not add safemode\n");
             }
 
-            if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/private/etc/apt/sources.list.d/g1lbertJB.list",
-                 "/private/var/unthreadedjb/g1lbertJB.list", 0, 0, 4) != 0) {
-                ERROR("Failed to symlink g1lbertJB.list!\n");
+            if (backup_add_file_from_path(backup, "MediaDomain", "payload/.g1lbert_installed",
+                 "Media/Recordings/.haxx/var/.g1lbert_installed",
+                 0100644, 0, 0, 4) != 0) {
+                ERROR("Could not add .g1lbert_installed\n");
             }
-            */
-            if (strcmp(product, "N94AP") == 0 || strcmp(build, "9A334") == 0) {
+
+            if (strcmp(build, "9A405") == 0 || strcmp(build, "9A406") == 0 ||
+                (strcmp(product, "N94AP") == 0 && strcmp(build, "9A334") == 0)) {
                 snprintf(untether_deb_path, 128, "payload/corona.deb");
                 if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
                      "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/corona.deb",
-                     0100755, 0, 0, 4) != 0) {
+                     0100644, 0, 0, 4) != 0) {
                     ERROR("Could not add corona untether\n");
                 }
-            }
 
-            if (strcmp(build, "9A405") == 0 || strcmp(build, "9A406") == 0) {
-                snprintf(untether_deb_path, 128, "payload/corona.deb");
-                if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
-                     "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/corona.deb",
-                     0100755, 0, 0, 4) != 0) {
-                    ERROR("Could not add corona untether\n");
-                }
-            }
-
-            if (strcmp(build, "9B206") == 0 || strcmp(build, "9B208") == 0) {
+            } else if (strcmp(build, "9B206") == 0 || strcmp(build, "9B208") == 0) {
                 snprintf(untether_deb_path, 128, "payload/rockyracoon.deb");
                 if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
                      "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/rockyracoon.deb",
-                     0100755, 0, 0, 4) != 0) {
+                     0100644, 0, 0, 4) != 0) {
                     ERROR("Could not add rockyracoon untether\n");
+                }
+
+            } else {
+                snprintf(untether_deb_path, 128, "payload/g1lbertJB.deb");
+                if (backup_add_file_from_path(backup, "MediaDomain", untether_deb_path,
+                     "Media/Recordings/.haxx/var/root/Media/Cydia/AutoInstall/g1lbertJB.deb",
+                     0100644, 0, 0, 4) != 0) {
+                    ERROR("Could not add g1lbertJB untether\n");
                 }
             }
         }
@@ -1709,16 +1718,20 @@ int jailbreak_device(const char *uuid)
         backup_free(backup);
     }
 
-    DEBUG("Stage 3: Restoring backup\n");
     if (build[0] == '1') {
         // ios 6.0-6.1.2 stage 3 restore
+        DEBUG("Stage 3: Restoring backup (2/2)\n");
         idevicebackup2(5, rargv2);
+
+        trash_var_backup(backup_dir, uuid);
+
     } else {
         // ios 5.0-5.1.1 stage 3 restore
-        idevicebackup2(6, rargv);
-
         afc_client_free(afc);
         afc = NULL;
+
+        DEBUG("Stage 3: Restoring backup (1/2)\n");
+        idevicebackup2(6, rargv);
 
         DEBUG("Waiting for reboot, not done yet, don't unplug your device yet!\n");
         // wait for disconnect
@@ -1743,10 +1756,31 @@ int jailbreak_device(const char *uuid)
         // give it a bit to run
         DEBUG("Don't unplug your device yet!\n");
         sleep(30);
-    }
 
-    if (build[0] == '1') {
-        trash_var_backup(backup_dir, uuid);
+        // ios 5.0-5.1.1 stage 3 setup
+        DEBUG("Stage 3: Deleting files (1/2)\n");
+        rmdir_recursive_afc(afc, "/Recordings", 1);
+        rmdir_recursive(backup_dir);
+
+        DEBUG("Stage 3: Creating backup (2/2)\n");
+        mkdir(backup_dir, 0755);
+        idevicebackup2(3, bargv);
+
+        DEBUG("Stage 3: Modifying backup (2/2)\n");
+
+        backup = backup_open(backup_dir, uuid);
+        if (!backup) {
+            ERROR("failed to open backup\n");
+        }
+
+        if (backup_symlink(backup, "MediaDomain", "Media/Recordings/.haxx/private/etc/apt/sources.list.d/g1lbertJB.list",
+             "/private/var/unthreadedjb/g1lbertJB.list", 501, 501, 4) != 0) {
+            ERROR("Failed to symlink g1lbertJB.list!\n");
+        }
+        backup_free(backup);
+
+        DEBUG("Stage 3: Restoring backup (2/2)\n");
+        idevicebackup2(5, rargv2);
     }
 
     DEBUG("Installed jailbreak successfully. Rebooting the device...\n");
