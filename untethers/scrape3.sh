@@ -5,7 +5,7 @@ devices=(iPhone2,1 iPhone3,1 iPhone3,3 iPhone4,1 iPad1,1 iPad2,1 iPad2,2 iPad2,3
 # pack the untether binaries in tars, run after scrape1.sh, scrape2.sh, and make
 # make sure to have jq in PATH
 jq="$(which jq)"
-mkdir ../tars 2>/dev/null
+mkdir tars 2>/dev/null
 
 for device in ${devices[@]}; do
     echo $device
@@ -44,15 +44,15 @@ for device in ${devices[@]}; do
         newtar="${device_type}_${build}"
         echo $newtar
 
-        mkdir -p $newtar/private/etc $newtar/private/var/unthreadedjb $newtar/usr/libexec newpayload/${build}_${device_model}AP
+        mkdir -p $newtar/private/etc $newtar/private/var/unthreadedjb $newtar/usr/libexec payload/${build}_${device_model}AP
         cp static/amfi.dylib $newtar/private/var/unthreadedjb
         cp static/launchd.conf $newtar/private/etc
         cp static/dirhelper $newtar/usr/libexec
-        cp ${device_model}_${build}/obj/${device_model}_${build} newpayload/${build}_${device_model}AP/jb
+        cp ${device_model}_${build}/obj/${device_model}_${build} payload/${build}_${device_model}AP/jb
         cp ${device_model}_${build}/obj/${device_model}_${build} $newtar/private/var/unthreadedjb/jb
         chmod +x $newtar/private/var/unthreadedjb/* $newtar/usr/libexec/*
         ./mktar.sh $newtar
-        mv $newtar.tar ../tars/$newtar.tar
+        mv $newtar.tar tars/$newtar.tar
         rm -r $newtar
     done
 done
