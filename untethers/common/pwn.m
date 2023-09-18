@@ -88,7 +88,7 @@ int patch_amfi_sandbox(void)
     
     addr = 0x80001000;
     
-    while(addr < (0x80001000 + 0xA00000))
+    while(addr < (0x80001000 + 0xA60000))
     {
         vm_read(kernel_task, addr, 2048, &buf, &sz);
         if(!buf || sz == 0)
