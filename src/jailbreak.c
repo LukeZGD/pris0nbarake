@@ -883,10 +883,14 @@ int jailbreak_device(const char *uuid)
         system("gzip -d /tmp/g1lbertJB/dump.cpio.gz");
         DEBUG("Extracting dump.cpio...\n");
         rmdir_recursive("var/mobile/Library/Caches");
+        rmdir_recursive("private/var/mobile/Library/Caches");
         system("cpio -idv < /tmp/g1lbertJB/dump.cpio");
         DEBUG("Grabbing com.apple.mobile.installation.plist...\n");
         FILE *newf = fopen("var/mobile/Library/Caches/com.apple.mobile.installation.plist", "rb");
-        assert(newf != NULL);
+        if (!newf) {
+            newf = fopen("private/var/mobile/Library/Caches/com.apple.mobile.installation.plist", "rb");
+            assert(newf != NULL);
+        }
         fseek(newf, 0, SEEK_END);
         long newfsize = ftell(newf);
         fseek(newf, 0, SEEK_SET);
@@ -912,6 +916,10 @@ int jailbreak_device(const char *uuid)
         num_csstores = 0;
 
         d = opendir("var/mobile/Library/Caches");
+        if (!d) {
+            d = opendir("private/var/mobile/Library/Caches");
+            assert(d != NULL);
+        }
         if (d) {
             while ((dir = readdir(d)) != NULL) {
                 if (strncmp(dir->d_name, csstorepprefix, strlen(csstorepprefix)) == 0) {
@@ -967,14 +975,17 @@ int jailbreak_device(const char *uuid)
 
     char HKPTMP[512];
     char dstf[512];
+    char delmbdx[512];
+    strcpy(HKPTMP, backup_dir);
+    strcat(HKPTMP, "/");
+    strcat(HKPTMP, uuid);
+    strcpy(delmbdx, HKPTMP);
+    strcat(delmbdx, "/Manifest.mbdx");
 
     if (build[0] == '1') {
         // ios 6.0-6.1.2 stage 1 setup
         DEBUG("Stage 1: Preparing files\n");
 
-        strcpy(HKPTMP, backup_dir);
-        strcat(HKPTMP, "/");
-        strcat(HKPTMP, uuid);
         mkdir(HKPTMP, 0755);
 
         // create Manifest.plist
@@ -1129,6 +1140,7 @@ int jailbreak_device(const char *uuid)
         plist_free(mobile_install_plist);
         backup_write_mbdb(backup);
         backup_free(backup);
+        unlink(delmbdx);
     }
 
     char *rargv[] = {
@@ -1275,6 +1287,7 @@ int jailbreak_device(const char *uuid)
             ERROR("Failed to symlink /var/tmp/launchd!\n");
         }
         backup_write_mbdb(backup);
+        unlink(delmbdx);
     }
 
     char *rargv2[] = {
@@ -1371,6 +1384,7 @@ int jailbreak_device(const char *uuid)
                 ERROR("Failed to symlink /var/tmp/launchd/sock!\n");
             }
         }
+        unlink(delmbdx);
     }
 
     idevicebackup2(5, rargv2);
@@ -1713,6 +1727,7 @@ int jailbreak_device(const char *uuid)
         }
         backup_write_mbdb(backup);
         backup_free(backup);
+        unlink(delmbdx);
     }
 
     if (build[0] == '1') {
@@ -1775,6 +1790,7 @@ int jailbreak_device(const char *uuid)
             ERROR("Failed to symlink g1lbertJB.list!\n");
         }
         backup_free(backup);
+        unlink(delmbdx);
 
         DEBUG("Stage 3: Restoring backup (2/2)\n");
         idevicebackup2(5, rargv2);
